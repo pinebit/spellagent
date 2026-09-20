@@ -1,0 +1,74 @@
+{
+  "name": "spellagent",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Review spelling and grammar corrections in local documentation and source comments",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "spellagent": "dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "LICENSE",
+    "docs/plan.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run build && npm test && npm run probe",
+    "probe": "node dist/cli/index.js probe",
+    "test:pack": "node scripts/test-pack.mjs",
+    "smoke:live": "node dist/probes/live.js",
+    "prepack": "npm run build",
+    "pack:local": "npm run build && npm pack --ignore-scripts",
+    "test:linux": "bash scripts/test-linux.sh",
+    "prepare:pack-cache": "node scripts/test-pack.mjs --prepare-cache"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.58",
+    "@ai-sdk/openai": "4.0.71",
+    "ai": "7.0.107",
+    "commander": "15.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5",
+    "web-tree-sitter": "0.27.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "tree-sitter-go": "0.25.0",
+    "tree-sitter-java": "0.23.5",
+    "tree-sitter-javascript": "0.25.0",
+    "tree-sitter-python": "0.25.0",
+    "tree-sitter-rust": "0.24.0",
+    "tree-sitter-typescript": "0.23.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pinebit/spellagent.git"
+  },
+  "homepage": "https://github.com/pinebit/spellagent#readme",
+  "bugs": {
+    "url": "https://github.com/pinebit/spellagent/issues"
+  },
+  "keywords": [
+    "cli",
+    "spell-checker",
+    "grammar-checker",
+    "documentation",
+    "typescript",
+    "tree-sitter",
+    "ai-sdk",
+    "ai-gateway"
+  ]
+}

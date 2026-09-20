@@ -1,0 +1,9 @@
+node_modules/
+dist/
+assets/
+coverage/
+*.tgz
+.spellagent/
+.env
+.env.*
+!.env.example
