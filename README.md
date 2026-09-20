@@ -1,16 +1,24 @@
 # SpellAgent
 
 A local CLI for correcting spelling and grammar in documentation and source comments.
-**Phase 0 feasibility build:** parser probes and contracts exist; interactive `init`
-and automatic `run` are planned in [the implementation plan](docs/plan.md).
-They are not implemented yet.
+**Phase 1 offline build:** interactive `init`, filesystem-only discovery, syntax-aware
+prose extraction, and `run --dry-run` are implemented. Provider inference and source
+editing remain Phase 2–3 work; a non-dry `run` currently exits with an actionable error.
+See [the implementation plan](docs/plan.md) for phase gates and current evidence.
 
-The planned workflow has only two commands: `spellagent init` and `spellagent run`.
+The workflow has only two commands: `spellagent init` and `spellagent run`.
 Setup is always interactive and writes `.spellagentrc.json`. A run requires
 that configuration, applies validated corrections without review/apply prompts,
 and leaves you to inspect the resulting local changes. Existing modifications are
 valid input; files changed during a run are protected by freshness checks.
-`run --dry-run` will preview scope offline without changing source.
+`run --dry-run` previews scope and protected/unsupported constructs offline without
+credentials, inference, or source changes.
+
+```sh
+spellagent init
+spellagent run --dry-run
+spellagent run docs src --dry-run --format json
+```
 
 Hidden files/directories are excluded by default; `includeHidden` opts eligible
 hidden paths into scope, while safety exclusions still apply. Setup offers a
@@ -59,7 +67,8 @@ in a temporary volume, then runs checks and local/global packed installations wi
 networking disabled. The volume and containers are removed afterward; the image
 stays cached. No host dependencies or API credentials are forwarded.
 
-See [Phase 0 verification evidence](docs/plan.md#11-phase-0-implementation-evidence).
+See the [Phase 0 evidence](docs/plan.md#11-phase-0-implementation-evidence) and
+[Phase 1 implementation status](docs/plan.md#12-phase-1-implementation-evidence).
 
 ## Providers and credentials
 
@@ -77,8 +86,9 @@ explicit upstream routes (`only` in config); no implicit model or connection fal
 See the [AI SDK Gateway documentation](https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway).
 
 Use only the key for your selected connection. `.env.example` lists the names;
-`.env` is ignored and is not automatically loaded. Future `--env-file` support
-belongs to Phase 1. Initialization and dry-run will stay offline for every connection,
+`.env` is ignored and is not automatically loaded. Explicit `--env-file` loading will
+be added with production inference in Phase 2. Initialization and dry-run stay offline
+for every connection,
 including Gateway. Pricing remains explicitly supplied by the user. Bundled setup suggestions are
 OpenAI `gpt-5.4-nano`, Anthropic `claude-haiku-4-5-20251001`, and Gateway
 `openai/gpt-5.4-nano` with an explicitly confirmed OpenAI route. You can override

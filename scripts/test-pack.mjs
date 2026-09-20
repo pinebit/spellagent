@@ -34,7 +34,9 @@ try {
   const cli = path.join(packageRoot, 'dist', 'cli', 'index.js');
   // Execute from an unrelated directory to catch working-directory-dependent assets.
   const run = args => execFileSync(process.execPath, [cli, ...args], { cwd: temporary, encoding: 'utf8' });
-  assert.match(run(['--help']), /Phase 0/);
+  const help = run(['--help']);
+  assert.match(help, /init \[options\]/);
+  assert.match(help, /run \[options\] \[paths\.\.\.\]/);
   assert.equal(run(['--version']).trim(), '0.0.0');
   const report = JSON.parse(execFileSync(process.execPath, [path.join(packageRoot, 'dist/probes/offline.js')],
     { cwd: temporary, encoding: 'utf8' }));

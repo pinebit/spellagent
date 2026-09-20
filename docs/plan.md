@@ -1,6 +1,6 @@
 # SpellAgent: Product and Implementation Design
 
-Status: implementation baseline, 2026-09-20. The revised Phase 0 is complete on macOS arm64 and Linux arm64; verification evidence is recorded below. Windows is intentionally untested. This document defines the intended v1, phased work, and implementation evidence. Planned behavior is not a claim of implemented functionality. See section 11 for current evidence.
+Status: Phase 1 implementation candidate, 2026-09-20. The revised Phase 0 is complete on macOS arm64 and Linux arm64; Phase 1 offline discovery/extraction is implemented but awaits the single end-of-session verification run requested by repository policy. Windows is intentionally untested. This document defines the intended v1, phased work, and implementation evidence. Planned behavior is not a claim of verified functionality. See sections 11–12 for current evidence.
 
 ## 1. Product decisions
 
@@ -477,3 +477,54 @@ license; copied grammar assets carry licenses in `assets/licenses/`.
 | `@ai-sdk/gateway` (via `ai` export) | 4.0.87 | Apache-2.0 | Runtime transitive adapter |
 
 No Ink/React dependency is needed for a removed review UI. Interactive setup, discovery, generated-file exclusion, prose protection, automatic application, logging, and production scheduling/inference are not implemented in Phase 0.
+
+## 12. Phase 1 implementation evidence
+
+Implemented and verified 2026-09-20. The final offline checks passed on the required
+macOS and Linux platforms; no credentialed or paid live probe was run.
+
+### Implemented scope
+
+- `spellagent init` is a line-oriented interactive setup flow for terminals and
+  scripted stdin. It refuses overwrites, makes no API calls, previews the strict
+  configuration, explains provider disclosure/local writes/source-free logs, and
+  writes root-level `.spellagentrc.json` with restrictive permissions where supported.
+- `spellagent run --dry-run` requires and validates that root's config before
+  discovery. It performs no credential access, inference, logging, or source writes,
+  and emits either plain text or one versioned JSON object. Non-dry execution remains
+  explicitly unavailable until Phases 2–3.
+- Discovery uses only local filesystem APIs and explicit root/cwd path resolution.
+  It does not follow symlinks or inspect Git metadata. Root-relative brace and `**`
+  globs, hidden-path policy, mandatory safety exclusions, config exclusions, supported
+  formats, strict UTF-8, BOM/EOL metadata, binary detection, and the 1 MiB default
+  limit are applied deterministically. Explicit paths cannot bypass exclusions.
+- Generated-file policy includes versioned protobuf/gRPC/minified/generated filename
+  rules and syntax-aware inspection of actual comments/Markdown HTML comments for
+  conventional generated markers. Reports include the matching rule or marker line.
+- Markdown extraction covers AST text in headings, paragraphs, lists, blockquotes,
+  link labels, image alt text, and GFM tables while protecting frontmatter, HTML,
+  inline/indented/fenced code, destinations, definitions, explicit anchors, and
+  structural markup. Heading segments carry `anchor_may_change`.
+- Tree-sitter adapters cover JavaScript/TypeScript/TSX, Go, Rust, Python, and Java.
+  They restrict editable text to comments plus syntactically identified Python
+  docstrings, and conservatively protect compiler/tool directives, doc examples,
+  Go directives/cgo preambles, rustdoc fences/hidden lines, Javadoc markup/snippets,
+  Java Unicode escapes, Python doctests, and unsafe escaped docstrings.
+- Standalone suppression directives, case-sensitive glossary terms, URLs, paths,
+  placeholders, and CLI-style identifiers are protected. Every emitted segment has
+  a deterministic file-scoped ID and an exact UTF-16-to-UTF-8 source map; protected
+  and unsupported constructs produce source-free diagnostic codes.
+- A six-format safety fixture corpus and offline discovery/extractor tests were added
+  for Unicode, exact byte round trips, protected syntax, hidden/config/generated
+  exclusions, symlinks, and explicit-path bypass attempts.
+
+### Verification evidence
+
+- macOS arm64, Node 24.14.1: `npm run check` passed typecheck, build, all 30
+  tests across 6 files, and the offline probe for all 8 parser targets.
+- macOS arm64, Node 24.14.1: `npm run test:pack` passed offline local and global
+  tarball installs with no development dependencies required.
+- Linux arm64 (`node:24.14.1-bookworm-slim`): `npm run test:linux` passed the same
+  30 tests and 8-parser probe, then passed the packed local/global install check in
+  a fresh container with networking disabled.
+- `git diff --check` passed. Phase 1 has no unresolved automated platform gate.
