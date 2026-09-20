@@ -11,3 +11,17 @@ Preserve explicit provider selection: OpenAI, Anthropic, or Vercel AI Gateway. N
 Keep docs/plan.md updated with evidence and unresolved gates; do not mark untested platforms as passed.
 
 Required platform qualification is macOS and Linux. Windows is intentionally untested and is not a phase gate; do not claim verified Windows support. Use npm run test:linux for isolated Docker verification.
+
+The intended product commands are only `init` and `run`. Initialization is always
+interactive and writes `.spellagentrc.json`; every run requires that config.
+Run applies locally validated corrections without review/apply prompts. Existing
+local modifications are allowed; preserve freshness and byte/syntax safety checks.
+Default to excluding all hidden paths; `includeHidden` cannot bypass mandatory
+safety exclusions. `limits.maxAgents` defaults to 32 and is user-configurable;
+adaptive rate limiting belongs to the scheduler, not a fixed account-limit claim.
+Keep config in root-level `.spellagentrc.json` and source-free logs in `.spellagent/`, never run results,
+selections, source snapshots, or backups. Do not reintroduce storage/retention,
+request/token-limit config knobs, or separate review/apply/runs/recover commands.
+Keep parser/live probes as developer entry points outside the product CLI.
+Bundled inexpensive model suggestions must remain overridable and offline during
+setup; do not claim model qualification without measured evidence.

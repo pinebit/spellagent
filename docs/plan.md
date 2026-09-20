@@ -1,23 +1,25 @@
 # SpellAgent: Product and Implementation Design
 
-Status: implementation baseline, 2026-09-20. Phase 0 is complete for the required macOS and Linux targets. Windows is intentionally untested. This document defines the intended v1, phased work, and implementation evidence. Planned behavior is not a claim of implemented functionality. See section 11 for current evidence.
+Status: implementation baseline, 2026-09-20. The revised Phase 0 is complete on macOS arm64 and Linux arm64; verification evidence is recorded below. Windows is intentionally untested. This document defines the intended v1, phased work, and implementation evidence. Planned behavior is not a claim of implemented functionality. See section 11 for current evidence.
 
 ## 1. Product decisions
 
-SpellAgent helps developers correct spelling and grammar in repository prose without losing control of their source files. The primary experience is: inspect scope, scan, review precise diffs, select corrections, apply, and inspect the resulting local file changes.
+SpellAgent helps developers correct spelling and grammar in repository prose without losing control of their source files. The primary experience is: initialize, optionally inspect scope, run corrections, and manually review the resulting local file changes.
 
 Confirmed choices:
 
 - First-release scope is documentation plus code comments and docstrings.
-- Corrections require explicit selection and application. No confidence-based automatic editing.
-- SpellAgent operates on local files only. It never invokes Git or a GitHub client/API, inspects version-control state, stages files, creates branches/commits/PRs, pushes changes, or publishes results. The correction result is locally modified files; reports, configuration, and recovery artifacts also stay local. Configured LLM inference remains the only intended runtime network interaction.
+- `run` authorizes inference and automatic application of locally validated corrections. There is no interactive review, selection, or apply step. Users manually review local changes and decide what to keep or commit. Model confidence never replaces validation.
+- SpellAgent operates on local files only. It never invokes Git or a GitHub client/API, inspects version-control state, stages files, creates branches/commits/PRs, pushes changes, or publishes results. The correction result is locally modified files; configuration and run logs also stay local. Configured LLM inference remains the only intended runtime network interaction.
 - Initial code coverage spans five language families: JavaScript/TypeScript (counted together), Python, Java, Go, and Rust. JavaScript/TypeScript, Go, and Rust are explicit requirements; Python and Java are the selected additions for broad adoption. This is a product coverage choice, not a claim that these are the literal top five in a single market ranking.
 
 Adopted defaults where the discussion did not specify a preference:
 
 - Markdown documentation accompanies all five language families, including JSX/TSX comments. English with `en-US` or `en-GB` dialects; default `en-US`.
 - Cloud inference is acceptable. Support direct OpenAI, direct Anthropic, and Vercel AI Gateway as first-release provider options through Vercel AI SDK. The user explicitly selects the connection, model, and credentials. Gateway is optional; there is no SpellAgent service.
-- Headless scanning is part of the core. Dedicated CI guidance and release hardening come after interactive review.
+- `init` is always interactive; `run` supports terminals and headless use with the same automatic correction behavior. Release hardening comes later.
+- Default `limits.maxAgents` is 32 simultaneous model workers, editable during `init` and in config. This is an upper bound, not a throughput target or a rate-limit guarantee.
+- Hidden files and directories are excluded by default. `includeHidden: true` opts them into normal scope rules; mandatory safety exclusions still win.
 - Distribute an npm CLI for macOS and Linux using Node.js 24 LTS. Windows remains untested and is outside required qualification at the user's request; do not claim verified Windows support. Verify dependency compatibility when implementing.
 - Optimize for trustworthy, minimal corrections and few false positives. Preserve voice, meaning, technical terminology, and dialect. Style rewriting, translation, factual correction, and identifier renaming are out of scope.
 
@@ -25,57 +27,52 @@ A model is an editor proposing changes, not an autonomous agent with filesystem 
 
 ## 2. User experience and commands
 
+The only product commands are `init` and `run`:
+
 ```sh
 spellagent init
-spellagent scan --dry-run
-spellagent scan
-spellagent review <run-id>
-spellagent scan docs src --format json
-spellagent apply <run-id> --selected --yes
-spellagent runs list
-spellagent runs delete <run-id>
+spellagent run --dry-run
+spellagent run
+spellagent run docs src --format json
 ```
 
 ### Setup and scope
 
-`init` creates only `.spellagentrc.json`. It does not read or modify `.gitignore` or any version-control configuration. Preview this write and confirm interactively; `--yes` authorizes it in automation. Refuse to overwrite an existing config. No API call is needed. Prompt for connection (OpenAI, Anthropic, or Vercel AI Gateway) and model, plus explicit upstream routes for Gateway, never an API key; explain the environment variable to set. Noninteractive initialization requires explicit provider/model arguments.
+`init` is always interactive, including when driven by scripted answers or a pseudo-terminal. There is no `--yes`, noninteractive mode, or provider/model flag shortcut. Prompt for every required choice and consume answers through the same prompt flow; EOF or cancellation aborts without writing a config. A terminal UI may use a line-oriented prompt fallback for scripted stdin. Preview and confirm the configuration write; refuse to overwrite an existing config.
 
-Explain during setup that eligible prose and bounded context are sent to the configured provider (through Vercel and allowed upstream providers when Gateway is selected), and saved runs contain source excerpts. Actual scan commands authorize inference; there is no repeated consent prompt. No background uploads or telemetry.
+Create `.spellagentrc.json` under the explicit `--root` or cwd. The config is a root-level JSON file; run logs live separately under `.spellagent/logs/`. Do not read or modify `.gitignore` or other version-control configuration. Prompt for connection (OpenAI, Anthropic, or Vercel AI Gateway), suggest a bundled low-cost model, allow a custom model, and require explicit upstream routes for Gateway. Prompt for `maxAgents` (default 32), dialect, scope/exclusions, and hidden-file inclusion. Never prompt for an API key; explain the selected connection's environment variable. Initialization makes no API calls.
 
-`scan --dry-run` resolves configuration, enumerates files, extracts eligible prose, and reports counts, exclusions, unsupported files, extraction warnings, and estimated request volume. It performs no inference and needs no credentials. Do not present a precise final cost before output usage is known.
+Explain that eligible prose and bounded context go to the configured provider (through Vercel and the allowed upstreams for Gateway), that `run` modifies local files, and that run logs contain paths, counts, usage, and diagnostics. No background uploads or telemetry.
 
-### Scan and review
+Every `run`, including `--dry-run`, requires a valid `.spellagentrc.json` created by setup. Missing config fails with exit 2 and an instruction to run `spellagent init`, before discovery, credential access, inference, or source writes. Config existence and schema validity are the setup marker; no extra hidden initialization flag. Do not search parent directories or load alternate config locations.
 
-With an interactive terminal, `scan` shows provider/model, scope, estimated spend, completed/total batches, findings, and actionable failures, then opens review. Headless execution prints a report and persists the run; it never prompts or writes source files. `--no-interactive` explicitly chooses that behavior. No arguments show help rather than starting a paid scan.
+`run --dry-run` resolves config, enumerates files, extracts eligible prose, and reports counts, exclusions, unsupported files, warnings, and estimated request volume. It performs no inference, needs no credentials, and never changes source. Do not present a precise final cost before output usage is known.
 
-Review groups findings by file and shows a few lines of context, the exact before/after text, category, and a short explanation. Findings start unselected. Arrow keys or `j/k` navigate, Space toggles selection, Enter opens detail, `a` selects the currently filtered findings, `x` clears that selection, `?` shows help, and `q` saves choices and exits. The apply action opens a final summary with selected finding/file counts and an explicit confirmation, defaulting to cancel. Cancelling returns to review.
+### Run and local review
 
-Users can dismiss a finding for this run or add a valid term to the project glossary. Glossary changes show a config diff and require confirmation. They affect future scans; existing runs retain their original policy. Dismissal is not a global suppression. No freeform replacement editor in v1.
+`run` shows provider/model, scope, progress, usage, changed files, and actionable failures. It validates proposals, revalidates current file contents, and applies corrections automatically without prompts. There are no `review`, `apply`, `runs`, or `recover` commands, saved selections, or resumable result files. Users inspect and edit resulting local files with their own tools. Existing local modifications are ordinary input; SpellAgent never checks whether files are committed.
 
-Review must work at narrow widths with a stacked diff, show selection through text as well as color, preserve terminal state on exit, and sanitize control characters in filenames, excerpts, and model text. Honor `NO_COLOR`. A plain text report is always available; raw terminal input requires both suitable stdin and stdout and must be disabled in CI.
+Terminal and headless runs share behavior. `--format json` changes reporting only; it does not make a run read-only. No arguments show help rather than starting a paid run. All proposals stay in memory; cancellation or incomplete inference before application writes no source. A new invocation recomputes proposals rather than resuming old ones. Application failures may leave a disclosed subset of files changed (section 7).
 
-`review <run-id>` resumes saved choices without inference. `apply <run-id> --selected --yes` applies only the saved selection after all validation; an empty selection is an explicit no-op. It never means “accept everything.” Interactive apply uses the same confirmation screen. Noninteractive apply without `--yes` fails before writing. Applying is intentionally unavailable through `scan` flags in v1.
+Honor `NO_COLOR`, sanitize control characters in paths and diagnostics, restore terminal state on exit, and support narrow terminals. A plain text reporter is always available. There is no raw-input review UI or freeform replacement editor. Users edit glossary/config directly between runs.
 
 ### Reports and exit codes
 
-Human output includes actionable totals, coverage/exclusions, actual or estimated cost, run ID, and the next command. JSON stdout is one versioned object with no progress messages; diagnostics go to stderr. Findings are ordered by normalized path and source location, independent of request completion order.
+Human output includes coverage, changed-file totals, known/estimated usage and cost, run ID, and log path. JSON stdout is one versioned object; progress/diagnostics go to stderr. Results are ordered by normalized path and source location, independent of request completion order. Reports may show ephemeral corrections, but SpellAgent does not save them. Redirecting a report is the user's explicit export.
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Completed command; a scan has no actionable findings, or an apply succeeded |
-| 1 | Completed scan/review with unapplied, non-dismissed findings |
-| 2 | Configuration, authentication, operational, stale-input, or incomplete-scan failure |
+| 0 | Complete dry run or run; all validated corrections were applied, or none were needed |
+| 2 | Configuration, authentication, operational, stale-input, or incomplete-run failure |
 | 130 | User cancelled the operation |
 
-Incomplete status takes precedence over findings. Cancelling a scan saves completed results where possible and never applies anything. After review, a scan's result reflects remaining actionable findings. Exiting review normally is not cancellation.
-
-An empty scope is reported as `no_eligible_text`, never “all clear”; headless scans return 2 so a misconfigured CI job cannot silently pass. Expected exclusions and unsupported extensions are reported as coverage information. Failure to parse/read a selected supported file, rejected model output that leaves a batch unresolved, or an exhausted budget makes the scan incomplete.
+An empty scope is `no_eligible_text` and returns 2, never “all clear.” Expected exclusions and unsupported extensions are coverage information. Failure to parse/read a selected supported file, unresolved model output, or exhausted budget makes the run incomplete and prevents application. Cancellation logs completed work and any already replaced files without saving proposals for resumption. Neither incomplete nor cancelled status is erased by partial file writes.
 
 ## 3. Discovery and extraction contract
 
 The project root is an explicit `--root`, otherwise cwd. Load `.spellagentrc.json` only from that root; never discover roots through version-control metadata or search parent directories implicitly. Paths and globs in config are root-relative. CLI path arguments are cwd-relative and must resolve inside the root. A project has one config in v1; no nested config inheritance. When invoked from a subdirectory, users can set `--root` explicitly to use the parent project configuration.
 
-Discover files through a local filesystem walk. Scope is determined only by CLI paths, config `include`/`exclude` globs, built-in exclusions, and generated-file rules. Use documented glob semantics: `/`-separated root-relative paths, `**` for recursive matching, braces for extension alternatives, dotfiles eligible unless excluded, and exclusions always winning. No negated reinclusion rules in v1. Do not read `.gitignore`, Git indexes, attributes, history, remotes, or tracking status. Explicit paths cannot bypass exclusions. The same directory contents and SpellAgent configuration must produce the same scope regardless of whether version control is installed or initialized.
+Discover files through a local filesystem walk. Scope is determined only by CLI paths, config `include`/`exclude` globs, built-in exclusions, and generated-file rules. Use documented glob semantics: `/`-separated root-relative paths, `**` for recursive matching, braces for extension alternatives, any dot-prefixed path component excluded unless `includeHidden` is true, and exclusions always winning. No negated reinclusion rules in v1. Do not read `.gitignore`, Git indexes, attributes, history, remotes, or tracking status. Explicit paths cannot bypass exclusions, including hidden-path filtering. `includeHidden` permits eligible prose in hidden paths such as `.vscode/notes.md`; it never overrides mandatory exclusions. The same directory contents and SpellAgent configuration must produce the same scope regardless of whether version control is installed or initialized.
 
 Always exclude version-control metadata by literal path names (`.git`, `.hg`, `.svn`, `.gitignore`, `.gitattributes`, `.gitmodules`) without opening them, `.spellagent/`, dependency/build directories (`node_modules/`, `vendor/`, `dist/`, `build/`, `target/`, `.venv/`, `venv/`, `__pycache__/`), lockfiles, known credential files such as `.env*`, binary files, and files over the configured size limit. Do not follow symlinks. Nested directories otherwise follow the same filesystem rules; exclude vendored or nested projects through config paths, without consulting submodule metadata. Exclude generated files using the layered policy below; exclude known minified filenames separately. Include prose in tests by default. A dry run explains every skip reason and reports unsupported formats in aggregate.
 
@@ -94,7 +91,7 @@ Language-specific documentation parsing is required: Rust doc comments use Markd
 
 Python docstrings are syntactically identified first-statement string expressions, not every triple-quoted string. Initially support single literal docstrings; skip implicit concatenation and spans with escapes that cannot be mapped safely. Docstring edits change observable `__doc__` values: syntax preservation is not a promise of identical program behavior.
 
-Markdown heading edits may change implicit anchor IDs. Show an `anchor_may_change` notice beside those findings and in the apply summary. Do not rewrite backlinks automatically. Skip explicit anchor syntax and Markdown constructs whose prose boundaries cannot be established reliably. `.mdx`, HTML documents, notebooks, localization files, and standalone reStructuredText are deferred.
+Markdown heading edits may change implicit anchor IDs. Show an `anchor_may_change` notice in the run report and source-free diagnostic log. Do not rewrite backlinks automatically. Skip explicit anchor syntax and Markdown constructs whose prose boundaries cannot be established reliably. `.mdx`, HTML documents, notebooks, localization files, and standalone reStructuredText are deferred.
 
 Each extractor returns source-mapped prose segments and protected ranges. Group related prose into paragraphs without losing exact mapping through comment prefixes or markup. Give the model read-only neighboring prose when useful; do not send full files or unrelated code by default. URLs, paths, inline identifiers, placeholders, and recognized markup are protected. If protection leaves too little useful prose, skip with a reason.
 
@@ -114,30 +111,30 @@ Some generators emit ordinary filenames, especially Java and Rust outputs; suffi
 
 Dry-run and JSON coverage expose `generated_path`, `generated_marker`, or `config_exclude`, together with the matching rule ID/glob and marker location where applicable. Show excluded-file counts and paths without copying source contents. `init` explains custom output exclusions; it does not silently rewrite generator configuration. A classification read failure makes a selected supported file unresolved/incomplete; never send the file because marker inspection failed.
 
-Persist the generated-detection rule version with the run. At apply time, repeat current path and generated-marker checks even for saved findings; a file newly excluded by project policy or detector rules must not be edited. An updated policy may restrict an old run but never widen its original editable scope.
+Keep the generated-detection rule version in the in-memory run. Before writing, repeat path, policy, and generated-marker checks; newly excluded files must not be edited.
 
-Phase 1 acceptance requires fixtures for protobuf outputs anywhere in the project, headers after long license notices, ordinary Java/Rust generated filenames, custom output paths, mixed generated regions, explicit-path attempts to bypass exclusions, and handwritten files quoting generator banners. A fake-provider integration test in Phase 2 must prove that excluded content appears in neither inference requests nor read-only context. Test that generated files remain byte-identical across scan/review/apply.
+Phase 1 acceptance requires fixtures for protobuf outputs anywhere in the project, headers after long license notices, ordinary Java/Rust generated filenames, custom output paths, mixed generated regions, explicit-path attempts to bypass exclusions, and handwritten files quoting generator banners. A fake-provider integration test in Phase 2 must prove that excluded content appears in neither inference requests nor read-only context. Test that generated files remain byte-identical throughout a run.
 
 ## 4. Correction policy and model pipeline
 
-Pipeline: discover → extract → filter glossary/suppressions → batch → propose → validate → persist → review → revalidate → apply.
+Pipeline: discover → extract → filter glossary/suppressions → batch → propose → validate → revalidate → apply → log summary.
 
 Use one bounded model call per batch. Group segments from the same file where practical. Keep editable segment IDs distinct from read-only context using separate structured request fields. If rendered as XML-style prompt sections, escape source text so it cannot close or introduce tags. Context is never an editable segment; prompt delimiters are guidance, not a validation boundary. Structured responses contain a `results` array with exactly one expected record per requested segment: `{ segmentId, proposals: [...] }`. An empty proposals array explicitly acknowledges review with no proposed changes. Each proposal contains `original`, `replacement`, `category` (`spelling` or `grammar`), and a short user-facing `reason`. The model does not provide authoritative filesystem paths or offsets. Never request hidden reasoning or use a model's self-reported confidence as an editing permission.
 
 For each proposal, the validator must:
 
 1. Check schema, size limits, known segment ID, allowed category, and nonempty/nonidentical strings.
-2. Resolve `original` to exactly one occurrence inside the stored editable text of the record's requested segment ID, never in neighboring context or the whole file. Ambiguous occurrences are rejected rather than guessed; a wider original phrase can disambiguate.
+2. Resolve `original` to exactly one occurrence inside the in-memory editable text of the record's requested segment ID, never in neighboring context or the whole file. Ambiguous occurrences are rejected rather than guessed; a wider original phrase can disambiguate.
 3. Map to original UTF-8 byte ranges using extractor mappings. Never confuse JavaScript UTF-16 indices, parser offsets, bytes, and displayed columns.
 4. Reject overlaps, protected-range changes, new delimiters/markup/control characters, and replacements that cross unmappable spans.
 5. Require identical leading and trailing whitespace sequences in `original` and `replacement`, comparing exact characters without trimming or normalization. Preserve glossary tokens and syntax, and bound replacement length to prevent paragraph rewrites. Legitimate proposals exceeding limits are rejected with a diagnostic, not silently truncated.
-6. Build a candidate file and verify format-specific invariants. Code outside permitted prose remains byte-identical; non-comment syntax stays identical, with a narrow allowance for eligible Python docstring contents. Markdown structure/destinations and documentation markup remain intact. Rust doc comments have a narrow allowance for prose changes in their desugared documentation attributes; preserve all other attribute and macro syntax. Such comments can be observed by documentation tooling and procedural macros, so do not claim universal behavioral equivalence. Selected combinations are validated again at apply time.
+6. Build a candidate file and verify format-specific invariants. Code outside permitted prose remains byte-identical; non-comment syntax stays identical, with a narrow allowance for eligible Python docstring contents. Markdown structure/destinations and documentation markup remain intact. Rust doc comments have a narrow allowance for prose changes in their desugared documentation attributes; preserve all other attribute and macro syntax. Such comments can be observed by documentation tooling and procedural macros, so do not claim universal behavioral equivalence. Combined corrections are validated again before writing.
 
-Accept partial batches at proposal granularity while tracking coverage separately. Parse a complete, bounded JSON envelope first, then validate records and proposals independently rather than letting one invalid item reject the entire response. Provider adapters must preserve a parseable response for this validation even if whole-response schema validation fails. Persist every independently valid, nonconflicting proposal from an unambiguously identified requested segment. Missing records remain unreviewed; rejected proposals leave their segment unresolved even when sibling proposals survive. Duplicate records for a segment invalidate that segment's records; reject unknown IDs and report a batch protocol error without discarding unrelated valid findings. Reject all proposals participating in an overlap rather than choosing by response order. Batch protocol errors and unresolved segments make the run incomplete, with the existing exit code and partial-coverage acknowledgement for applying retained findings.
+Accept partial batches at proposal granularity while tracking coverage separately. Parse a complete, bounded JSON envelope first, then validate records and proposals independently rather than letting one invalid item reject the entire response. Provider adapters must preserve a parseable response for this validation even if whole-response schema validation fails. Retain in memory every independently valid, nonconflicting proposal from an unambiguously identified requested segment. Missing records remain unreviewed; rejected proposals leave their segment unresolved even when sibling proposals survive. Duplicate records for a segment invalidate that segment's records; reject unknown IDs and report a batch protocol error without discarding unrelated valid findings. Reject all proposals participating in an overlap rather than choosing by response order. Batch protocol errors and unresolved segments make the run incomplete, with exit 2; no corrections are applied from an incomplete run.
 
-For example, if 48 of 50 requested segments return valid records and two are omitted, retain all validated corrections from the 48, report 48 reviewed and two unreviewed, and mark the run incomplete. An explicit empty proposals array counts as reviewed; an omitted segment does not. Coverage describes protocol completion, not a guarantee that the model detected every error. Persist per-segment coverage states and safe rejection reasons, and show retained finding counts alongside coverage in review and JSON output. No automatic retry or repair request is added for missing records.
+For example, if 48 of 50 requested segments return valid records and two are omitted, retain all validated corrections from the 48, report 48 reviewed and two unreviewed, and mark the run incomplete. An explicit empty proposals array counts as reviewed; an omitted segment does not. Coverage describes protocol completion, not a guarantee that the model detected every error. Keep per-segment coverage and safe rejection reasons in memory; report coverage counts and rejection codes in logs and JSON output. No automatic retry or repair request is added for missing records.
 
-Malformed or truncated JSON is not salvaged with substring parsing, regex, or speculative repair; none of that response's proposals become selectable. Already validated findings from other responses survive. Models receive repository text strictly as data and have no tools, executable actions, or ability to change configuration. Prompt-injection defenses rely on these capability and validation limits, not prompts alone.
+Malformed or truncated JSON is not salvaged with substring parsing, regex, or speculative repair; none of that response's proposals become eligible for application. Already validated findings from other responses survive. Models receive repository text strictly as data and have no tools, executable actions, or ability to change configuration. Prompt-injection defenses rely on these capability and validation limits, not prompts alone.
 
 English text only in v1. Ask the model to leave other languages unchanged; do not claim reliable automatic language detection. Dialect selection avoids unsolicited dialect conversion. The glossary preserves exact, case-sensitive terms by default, including phrases; it is not a dictionary of forced replacements.
 
@@ -151,15 +148,15 @@ Use one npm package with internal modules, not a service or a multi-package plat
 | --- | --- |
 | Runtime/build | Node.js 24 LTS, TypeScript strict mode, ESM, npm lockfile; publish compiled JS |
 | CLI | Commander; argument parsing and mapping errors to documented exit codes |
-| UI | Ink/React for review and progress; plain text/JSON reporters separate from Ink |
+| UI | Interactive setup prompts; plain text/JSON run reporters; no review UI |
 | Configuration/contracts | Zod schemas; reject unknown config keys and unsupported schema versions |
 | Code parsing | Tree-sitter with pinned compatible JS/TS/TSX/Python/Java/Go/Rust grammars behind extractor adapters |
 | Markdown parsing | Unified/remark parser with GFM support and positional source mapping; patch original source rather than serialize the AST |
 | LLM access | Vercel AI SDK with direct OpenAI/Anthropic and explicit AI Gateway adapters; structured output validation |
-| Storage | Versioned local JSON artifacts, atomic file replacement; no database |
+| Local state | `.spellagentrc.json` and `.spellagent/logs/<run-id>.jsonl`; no result store or database |
 | Verification | Vitest for core/fixture tests, CLI integration tests, and targeted terminal interaction tests |
 
-Prefer packaged WASM Tree-sitter grammars to avoid user-side native builds. Phase 0 must prove runtime/grammar compatibility, package asset resolution, source positions, installation, and redistribution licenses. If WASM packaging fails the gate, record and validate a native-binding alternative before implementing extraction; never download grammars at scan time. Exact package versions belong in the lockfile; section 11 records the dated feasibility inventory. The pinned web-tree-sitter WASM binding reports UTF-16 indices and columns, verified by Unicode probes; convert explicitly to UTF-8 byte offsets. Do not assume native binding offset conventions apply.
+Prefer packaged WASM Tree-sitter grammars to avoid user-side native builds. Phase 0 must prove runtime/grammar compatibility, package asset resolution, source positions, installation, and redistribution licenses. If WASM packaging fails the gate, record and validate a native-binding alternative before implementing extraction; never download grammars during a run. Exact package versions belong in the lockfile; section 11 records the dated feasibility inventory. The pinned web-tree-sitter WASM binding reports UTF-16 indices and columns, verified by Unicode probes; convert explicitly to UTF-8 byte offsets. Do not assume native binding offset conventions apply.
 
 Suggested layout:
 
@@ -171,26 +168,27 @@ src/
   extractors/   # markdown, javascript/typescript, python, java, go, rust, mapping
   llm/          # providers, prompts, structured responses, usage
   validation/   # proposed edit checks, format invariants
-  apply/        # preflight, file writes, journal/recovery
-  storage/      # run artifacts and retention
-  ui/           # Ink screens and plain/JSON reporters
+  apply/        # preflight and atomic per-file writes
+  logging/      # audit events and summaries, no source/result persistence
+  ui/           # setup prompts and plain/JSON reporters
+  probes/       # developer-only parser and optional live probes
 ```
 
-Core code must not import Ink or process-global CLI state. Inject provider, filesystem/storage, clock, and cancellation dependencies where tests need control. Emit typed events (`fileSkipped`, `batchCompleted`, `findingValidated`, `runFinished`) for reporters. Use a bounded worker queue, not unbounded `Promise.all` over a repository.
+Core code must not import terminal UI modules or process-global CLI state. Inject provider, filesystem/logging, clock, and cancellation dependencies where tests need control. Emit typed events (`fileSkipped`, `batchCompleted`, `findingValidated`, `runFinished`) for reporters. Use a bounded worker queue, not unbounded `Promise.all` over a repository.
 
 Core data contracts:
 
 - `FileSnapshot`: normalized root-relative path, SHA-256 of original bytes, format, encoding/BOM/EOL metadata.
 - `Segment`: deterministic ID, file snapshot reference, editable text, source map, protected ranges, bounded context.
-- `Finding`: run-local stable ID, resolved byte range, exact original/replacement, category/reason, validation version, selection/disposition, notices.
-- `Run`: schema/tool/extractor/prompt versions, effective config excluding secrets, generated-detection rule version, scope, snapshots, findings, coverage, usage/cost, timestamps, and terminal scan status (`completed`, `incomplete`, `cancelled`, `failed`).
-- `ApplyJournal`: selected finding IDs, per-file before/after hashes, backup locations and write states. Application status is separate from scan status; never erase an incomplete scan by applying its available findings.
+- `Finding`: run-local stable ID, resolved byte range, exact original/replacement, category/reason, validation version, application disposition, notices.
+- `Run`: ephemeral schema/tool/extractor/prompt versions, effective config, generated-detection version, scope, snapshots, findings, coverage, usage, timestamps, and status (`completed`, `incomplete`, `cancelled`, `failed`). Never serialize this source-bearing state to disk.
+- `RunLog`: versioned, source-free audit summary with explicit provider/model/routes, times, status, coverage/finding/application counts, usage, and per-file before/after hashes and write states. Append sanitized diagnostic codes and write-intent/completion events during execution; logs are not executable input or replayable corrections.
 
-Public reports use 1-based line/column locations, with columns defined as Unicode code points; byte offsets are explicitly named. IDs need only remain stable within a saved run in v1. Source changes require a new scan.
+Public reports use 1-based line/column locations, with columns defined as Unicode code points; byte offsets are explicitly named. IDs need only remain stable within one process run. Source changes require a new run.
 
 ## 6. Configuration and resource limits
 
-Illustrative full configuration; `YOUR_MODEL_ID` must be replaced during setup. Model names and prices are deliberately not hardcoded as product defaults.
+Illustrative configuration after interactive setup. Model suggestions are bundled, dated choices; prices are not silently copied into billing configuration.
 
 ```json
 {
@@ -199,25 +197,20 @@ Illustrative full configuration; `YOUR_MODEL_ID` must be replaced during setup. 
   "dialect": "en-US",
   "include": ["**/*.md", "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,py,pyi,java,go,rs}"],
   "exclude": [],
+  "includeHidden": false,
   "glossary": ["authZ", "AST", "Vercel", "headless"],
   "provider": {
     "name": "openai",
-    "model": "YOUR_MODEL_ID"
+    "model": "gpt-5.4-nano"
   },
   "limits": {
     "maxFileBytes": 1048576,
-    "maxRequests": 100,
-    "maxInputTokensPerRequest": 6000,
-    "maxOutputTokensPerRequest": 2000,
-    "concurrency": 2,
+    "maxAgents": 32,
     "timeoutMs": 60000,
     "maxRetries": 2,
     "maxEstimatedUsd": null
   },
-  "pricing": null,
-  "storage": {
-    "retentionDays": 7
-  }
+  "pricing": null
 }
 ```
 
@@ -235,47 +228,49 @@ Provider configuration is a discriminated union. Direct `openai` and `anthropic`
 
 The placeholder must be replaced. Use an explicitly constructed AI SDK provider instance in every mode; never let a bare model string choose an implicit Gateway connection. Do not silently fall back between direct and Gateway connections or between models. Do not use ambient Vercel OIDC or per-request BYOK in v1. Model/route capability qualification must establish structured output, output limits, warnings, and usage handling. Gateway support does not imply every catalog model is qualified. Persist safe selected model and routing metadata where supplied; never persist gateway credentials or raw provider metadata wholesale.
 
-`init` and dry-run remain offline even for Gateway: no catalog, model capability, pricing, credits, or authentication fetch. User-supplied pricing with an `asOf` date remains authoritative for local reservations. Gateway prices must cover the selected model on every allowed route and applicable billable token categories; unsupported charges preclude a dollar budget. `maxRequests` bounds client inference dispatches, including client retries, not gateway-internal upstream attempts. Gateway-managed routing and server-side work may continue beyond the client's view or cancellation; preserve the existing distinction between estimated local spend and actual billing.
+`init` and dry-run remain offline even for Gateway: no catalog, model capability, pricing, credits, or authentication fetch. User-supplied pricing with an `asOf` date remains authoritative for local reservations. Gateway prices must cover the selected model on every allowed route and applicable billable token categories; unsupported charges preclude a dollar budget. Gateway-managed routing and server-side work may continue beyond the client's view or cancellation; preserve the existing distinction between estimated local spend and actual billing.
 
 A non-null dollar budget requires explicit pricing for the selected model: `inputUsdPerMillionTokens`, `outputUsdPerMillionTokens`, and `asOf` date. Treat all input as uncached for conservative estimates. Models with extra charge categories require an adapter that accounts for them or cannot use a dollar budget. Unknown pricing must never be shown as zero cost.
 
-Before each dispatch, reserve estimated input plus the configured output maximum against the run budget. Reservations include concurrent calls and retries. Reconcile with reported billable usage; retain the reservation as estimated spend when usage is unavailable, including ambiguous network failures. Report known and estimated usage separately. No promise of a hard provider billing cap: token estimation, pricing changes, hidden billable categories, and server-side work after cancellation can affect charges.
+Before each dispatch, reserve estimated input plus the adapter-computed output maximum against the run budget. Reservations include concurrent calls and retries. Reconcile with reported billable usage; retain the reservation as estimated spend when usage is unavailable, including ambiguous network failures. Report known and estimated usage separately. No promise of a hard provider billing cap: token estimation, pricing changes, hidden billable categories, and server-side work after cancellation can affect charges.
 
 Use a model-compatible tokenizer where available, otherwise a documented conservative estimator. Reject unsupported model settings instead of silently discarding required output/usage limits. Input limits include instructions, schema, context, and text. Split batches to fit; never discard content silently.
 
-Count every dispatched attempt toward `maxRequests`. Disable SDK-level retries and implement one scheduler retry policy: retry transient network errors, 429s, and retryable 5xx responses with jitter and bounded `Retry-After`, at most twice and within the total request timeout. No automatic retry on authentication, schema, or policy errors. No hidden output-repair loop. Stop scheduling when a resource limit is hit; preserve completed work and mark the run incomplete.
+Count every dispatched attempt in usage, including retries. There is no user-configurable total request cap. Disable SDK-level retries and implement one scheduler retry policy: retry transient network errors, 429s, and retryable 5xx responses with jitter and bounded `Retry-After`, at most twice and within the total request timeout. No automatic retry on authentication, schema, or policy errors. No hidden output-repair loop. Stop scheduling when a resource limit is hit; preserve completed work and mark the run incomplete.
 
-## 7. Safe application and persistence
+### Model suggestions and scheduling
 
-Scanning never writes source files. Runs are local under `.spellagent/runs/<run-id>/`, with restrictive permissions where the OS supports them. Persist only the excerpts needed for findings/review, policy metadata, usage, and diagnostics; no full prompts, raw provider bodies, credentials, or telemetry. Source excerpts are sensitive even when credentials are redacted. Full original bytes of selected files are retained only as apply recovery backups.
+Bundled suggestions checked 2026-09-20: direct OpenAI `gpt-5.4-nano`, direct Anthropic `claude-haiku-4-5-20251001`, Gateway `openai/gpt-5.4-nano` with a separately confirmed `only: ["openai"]`. These are initial low-cost, fast candidates, not a claim of measured best quality or minimum total cost for this workload. Official references: [OpenAI nano](https://developers.openai.com/api/docs/models/gpt-5.4-nano), [Anthropic Haiku](https://platform.claude.com/docs/en/models/haiku-4-5/overview), [Gateway listing](https://vercel.com/ai-gateway/models/gpt-5.4-nano). Setup offers a custom model override. Updating recommendations is a reviewed release change and never changes existing config. Phase 2 live capability checks and Phase 4 precision/recall and cost measurements must qualify these candidates before v1.
 
-Run IDs must be validated identifiers, not paths. Validate loaded artifacts as untrusted data and revalidate all edits from disk. Reject paths outside the root, symlink traversal, hard-linked target files, unsupported schema versions, and changed project roots. A saved run never grants arbitrary file-write authority.
+`limits.maxAgents` defaults to 32 and accepts any positive safe integer; users may raise or lower it during setup. It caps simultaneous model calls, including retries, not autonomous agents with tools or separate OS processes. The scheduler starts conservatively, ramps within this ceiling, respects available provider request/token reset information and `Retry-After`, and lowers dispatch pressure after 429s. Limits vary by account, model, and Gateway route; a static worker count cannot establish RPM/TPM compliance. Setup explains this without fetching account limits.
 
-On apply:
+Remove `concurrency`, `maxRequests`, `maxInputTokensPerRequest`, `maxOutputTokensPerRequest`, and `storage` from the public schema; reject them as unknown keys. Model adapters own documented, tested context/batch/output bounds and include instructions, schema, and context in calculations. These internal bounds remain necessary for safe requests and budget reservations; removing config knobs does not mean unlimited token generation. Qualify bounds per supported model; unsupported custom models fail with an actionable capability error instead of silently ignoring limits. Scheduling, adaptive throttling, and these production capabilities are Phase 2 work, not claimed by Phase 0.
 
-1. Acquire a project application lock and validate all selected findings. Preflight the entire selection before the first source write. Incomplete runs require an explicit partial-coverage acknowledgement interactively or `--allow-incomplete` in automation, in addition to normal selection/confirmation.
-2. Compare current complete-file hashes to the scanned snapshots. Any stale file rejects the whole selection; do not rebase offsets or fuzzy-match. Preexisting local edits are allowed: preserve the exact scanned bytes. No version-control status check, clean-state requirement, or version-control operation is involved.
-3. Re-extract current source, verify permitted ranges and syntax invariants, reject overlaps, and apply replacements in descending byte-offset order in memory. Mutate only UTF-8 `Buffer` data using byte slices and `Buffer.concat` or a correctly sized allocated buffer; encode replacement text separately. Never apply byte offsets to JavaScript string slicing or rebuild untouched bytes by decoding/re-encoding strings. Decoded views for parsing and display are allowed, but original buffers remain authoritative for patching. Preserve unrelated bytes, BOM, line endings, final newline, and file mode.
-4. Write recovery backups and a durable journal before replacing files. Prepare temporary files in each target directory, recheck current content immediately before replacement, and use per-file atomic rename on supported platforms. The project lock coordinates SpellAgent processes only; it cannot eliminate races with arbitrary editors. Document this limitation and require recovery on detected conflicts.
-5. Record each completed replacement. Multi-file application is not globally atomic. On failure/interruption, stop and expose exactly which files changed. Do not overwrite later user edits during attempted recovery.
+## 7. Safe application and local logs
 
-Provide `spellagent recover <run-id>` to restore backups only when each current file still matches its recorded post-apply hash. Restore via the same per-file safety mechanism; refuse conflicts and preserve artifacts for manual recovery. Journal states must distinguish prepared, replaced, and restored files; after a crash, reconcile using before/after hashes and treat any other hash as a conflict. Recovery is idempotent. Successful findings are marked applied; reapplying them is a no-op.
+`run` works on current local contents, including pre-existing edits. It does not inspect version-control status or require a clean working directory. After complete inference and validation, apply all accepted nonconflicting corrections automatically. A dry run never writes source; an incomplete inference run also never writes source.
 
-Retain runs for seven days by default. Prune expired runs on startup after checking for unfinished application journals; never delete unresolved recovery data automatically. Explicit deletion of such a run fails with recovery instructions. Warn that exported JSON may contain source text. No cross-run inference cache in v1: resume means reviewing saved completed results, not replaying interrupted requests invisibly.
+1. Acquire a project application lock under `.spellagent/`. Preflight the entire set of corrections before the first write. Reject root escapes, symlinks, hard-linked targets, changed roots/config, generated files, and invalid source mappings. Check config/log paths against symlink traversal too.
+2. Compare complete current-file hashes with the in-memory snapshots. Any file changed since discovery rejects the entire preflight; do not rebase offsets or fuzzy-match. This protects concurrent edits, not a version-control baseline.
+3. Re-extract current source, verify permitted ranges and syntax, reject overlaps, and build each candidate using UTF-8 `Buffer` byte slices and `Buffer.concat`. Never apply byte offsets to JavaScript string slicing or rebuild untouched bytes by decoding/re-encoding. Preserve unrelated bytes, BOM, line endings, final newline, and mode.
+4. Write and flush a source-free intent log with before/after hashes before replacement. Prepare temporary files in target directories, recheck hashes immediately before replacement, and use per-file atomic rename. Record and flush each completed replacement. If logging fails, stop before further writes. A lock coordinates SpellAgent processes only; arbitrary editors can still race between the final check and rename. Document this limitation.
+5. On write failure or cancellation, stop further replacements and report exactly which files were replaced, pending, or uncertain. Multi-file writes are not globally atomic. After a crash, the next `run` validates logs as untrusted data (schema, root-relative paths, no symlink traversal) and reconciles unfinished intents against before/after hashes, reports uncertainty/conflicts, and exits 2 before starting inference. Users inspect affected files and archive the unresolved log before a fresh run. Never automatically roll back or overwrite later user edits.
+
+Configuration persists in root-level `.spellagentrc.json`; append-only run logs persist under `.spellagent/logs/`, using restrictive permissions where supported. No saved findings, selections, source snapshots, full prompts, raw provider bodies, backups, recovery journal, result cache, or retention configuration. Temporary candidate files exist only for atomic writes; clean up owned temporaries on normal exit and report possible leftovers after a crash. Logs contain paths, locations/counts, hashes, provider/model, usage/cost, bounded diagnostic codes, and write outcomes; omit prose excerpts, replacements, secrets, and arbitrary provider error strings. The final `RunLog` summary is schema validated. Logs remain until users delete/archive them manually; there is no automatic pruning or run-management command. They cannot resume inference or reapply edits. Users review local changes with their own tools.
 
 ## 8. Quality and release acceptance
 
 Deterministic tests require no credentials or network. Use a fake provider with fixtures for malformed output, partial completion, duplicate text, overlapping edits, timeouts, rate limits, cancellation, and missing usage. Real-provider evaluations are explicit, cost-limited developer commands, never default unit tests.
 
-Partial-batch contract tests must cover 48 returned records out of 50, explicit empty proposal arrays, missing/unknown/duplicate segment IDs, invalid proposals alongside valid siblings, overlapping proposals, and truncated JSON. Assert retained findings, per-segment coverage, incomplete exit status, and explicit acknowledgement before partial application. Include whitespace-boundary changes and context-only matches as rejected proposals, and multibyte text before multiple edits to verify Buffer-based patching.
+Partial-batch contract tests must cover 48 returned records out of 50, explicit empty proposal arrays, missing/unknown/duplicate segment IDs, invalid proposals alongside valid siblings, overlapping proposals, and truncated JSON. Assert retained findings, per-segment coverage, incomplete exit status, and no source writes for incomplete inference. Include whitespace-boundary changes and context-only matches as rejected proposals, and multibyte text before multiple edits to verify Buffer-based patching.
 
-Safety fixtures must cover CRLF/LF, UTF-8 BOM, emoji/non-Latin prefixes, repeated words, comment prefixes, protected directives, Go build/embed/generate directives and cgo preambles, Rust nested comments and rustdoc hidden test lines, Java Unicode escapes and Javadoc snippets, escaped/concatenated Python strings, doctests, Markdown links/code/tables, newly introduced delimiters, dirty files, stale hashes, symlink/path escapes, interrupted writes, and recovery conflicts. Assert that all bytes outside accepted ranges remain identical and executable syntax is unchanged under the documented Python docstring and Rust documentation exceptions.
+Safety fixtures must cover CRLF/LF, UTF-8 BOM, emoji/non-Latin prefixes, repeated words, comment prefixes, protected directives, Go build/embed/generate directives and cgo preambles, Rust nested comments and rustdoc hidden test lines, Java Unicode escapes and Javadoc snippets, escaped/concatenated Python strings, doctests, Markdown links/code/tables, newly introduced delimiters, dirty files, stale hashes, symlink/path escapes, interrupted writes, log failures, and crash reconciliation conflicts. Assert that all bytes outside accepted ranges remain identical and executable syntax is unchanged under the documented Python docstring and Rust documentation exceptions.
 
-CLI tests must prove operation without Git installed, no subprocess invocation or GitHub network requests, no reads/writes of version-control metadata, and identical scope with or without a `.git` directory. CLI tests also cover non-TTY use, JSON purity, exit precedence, empty scopes, ignored versus failed files, and deterministic ordering. Terminal tests cover selection defaults, filtering/select-all scope, confirmation cancellation, resize, and restoration after Ctrl+C. Validate installation from `npm pack` on macOS and Linux, including bundled parser assets. Windows testing is not required; report it as unverified.
+CLI tests must prove operation without Git installed, no subprocess invocation or GitHub network requests, no reads/writes of version-control metadata, and identical scope with or without a `.git` directory. CLI tests also cover interactive-only initialization (including scripted answers and EOF), missing/invalid config before discovery or credential access, hidden defaults/override, and non-TTY runs, JSON purity, exit precedence, empty scopes, ignored versus failed files, and deterministic ordering. Terminal tests cover setup prompts, confirmation cancellation, scripted input, resize, and restoration after Ctrl+C. Run tests prove no review/apply prompts in TTY or headless mode. Validate installation from `npm pack` on macOS and Linux, including bundled parser assets. Windows testing is not required; report it as unverified.
 
 Create a manually labeled evaluation corpus of at least 300 English prose segments (at least 40 per code-language family and 40 Markdown segments, with the remainder distributed across edge cases) covering every initial extractor, both dialects, clean prose, domain terminology, genuine errors, and protected syntax. Reserve a held-out subset. Before v1, target at least 95% precision among emitted corrections and 80% recall of labeled, in-scope spelling/grammar errors; report exact counts, categories, and multiple runs instead of claiming universal accuracy. Require zero protected-syntax edits in the safety fixture suite. These are release targets to measure, not current results. If unmet, narrow supported patterns or improve prompts/extraction and reevaluate.
 
-Record elapsed time, request counts, tokens, and cost on a fixed public fixture repository for each supported provider/model pair. Model choice is a release qualification decision, not an automatically changing remote default.
+Record elapsed time, request counts, tokens, and cost on a fixed public fixture repository for each supported provider/model pair. Bundled low-cost suggestions require release qualification; they are not automatically changing remote defaults.
 
 ## 9. Phased implementation with Codex CLI
 
@@ -289,31 +284,31 @@ Exit: a packed installation can parse fixtures and map exact bytes on the requir
 
 ### Phase 1 — Offline discovery and extraction
 
-Implement root/config resolution, `init`, `scan --dry-run`, filesystem-only inclusion/exclusion semantics, all initial extractors, glossary/protection/suppression policy, and coverage reporting. Build the safety fixture corpus alongside the adapters. Implement in reviewable slices: Markdown and JS/TS first, then Go and Rust, then Python and Java. All five code-language families are required before closing this phase; the slices are not separate reductions in v1 scope.
+Implement root/config resolution, `init`, `run --dry-run`, filesystem-only inclusion/exclusion semantics, all initial extractors, glossary/protection/suppression policy, and coverage reporting. Build the safety fixture corpus alongside the adapters. Implement in reviewable slices: Markdown and JS/TS first, then Go and Rust, then Python and Java. All five code-language families are required before closing this phase; the slices are not separate reductions in v1 scope.
 
 Exit: dry run is useful without credentials, explains scope, and every emitted editable span round-trips to its exact original bytes. Unsupported/unsafe patterns are visible and never treated as editable prose.
 
-### Phase 2 — Headless proposals and durable runs
+### Phase 2 — Proposals, scheduling, and logs
 
-Add production direct OpenAI/Anthropic and Gateway provider adapters, bounded scheduling, resource accounting, structured proposal validation, run persistence, text/JSON reporting, cancellation, and documented scan exit codes. Keep source editing unavailable.
+Add production direct OpenAI/Anthropic and Gateway adapters, model-specific internal bounds, `maxAgents` scheduling with rate-limit feedback, resource accounting, structured validation, source-free run logs, text/JSON reporting, cancellation, and run exit codes. Source editing remains unavailable at this intermediate development gate; clearly label that limitation until Phase 3 completes the intended `run` behavior. No resumable results.
 
-Exit: all three connection adapters pass contract tests; opt-in live qualification works for selected models; malformed/partial/failed batches have correct coverage and exit status; an interrupted scan retains completed results; source files remain byte-identical.
+Exit: all three adapters pass contracts; opt-in live qualification works for selected models; malformed/partial/failed batches have correct coverage/status; interruption preserves audit logs without source excerpts; files remain byte-identical; mock tests prove active requests never exceed `maxAgents` and throttling/retries respect limits.
 
-### Phase 3 — Reviewed application: first usable release
+### Phase 3 — Automatic safe application: first usable release
 
-Add Ink progress/review, saved selections, glossary updates, confirmation, `apply`, project lock, complete preflight, per-file writes, journal, and recovery. Add `runs list/delete` and retention. Scan opens review only in a suitable terminal.
+Complete `run` with automatic application, whole-run preflight, project lock, per-file atomic writes, durable write events, and crash reconciliation. No interactive review, separate apply command, saved selections, backups, or recovery command.
 
-Exit: a developer can scan, inspect exact diffs, accept a subset, apply, and recover safely. TTY and headless paths share validation. Stale files, conflicting edits, crashes, and partial writes satisfy section 7. All safety tests pass.
+Exit: an initialized developer can run corrections on already modified files and inspect local changes afterward. TTY and headless behavior agree. Incomplete inference does not edit files. Stale inputs, conflicting edits, crashes, partial writes, and logging failures satisfy section 7. All safety tests pass.
 
-### Phase 4 — v1 qualification and CI
+### Phase 4 — v1 qualification
 
-Qualify the evaluation corpus, platform packaging, accessible/plain rendering, performance measurements, error guidance, and documentation. Document CI using environment-injected credentials and `scan --no-interactive --format json`, with read-only behavior and explicit exit codes. This is a generic headless invocation on an already available local directory, not a GitHub integration: no checkout, PR annotations, remote artifact upload, or repository operations. Standard CI does not apply changes. Provide artifact-retention guidance without uploading repository excerpts automatically.
+Qualify the evaluation corpus, macOS/Linux packaging, accessible/plain rendering, performance, error guidance, and documentation. Document interactive setup, normal runs, offline scope previews, and manual review of local changes. `run --format json` applies corrections; `run --dry-run --format json` is offline and read-only. Document scripted answers through the same setup prompts.
 
-Exit: section 8 targets are measured and met, install/use/recovery instructions are reproducible, and a supported provider/model matrix with evaluation dates is published in repository documentation. Package publication requires separate user authorization.
+Exit: section 8 targets are measured and met, install/use and interrupted-write instructions are reproducible, and a supported provider/model matrix with evaluation dates is published. Package publication requires separate authorization.
 
 ### Later, only after v1 evidence
 
-Evaluate an optional reviewer pass that can accept/reject existing proposals, with its own budget reservation; require a measured improvement before enabling it. Consider changed-file scanning using local content-hash snapshots (never Git history/status), persistent baselines, inference caching, local models/custom endpoints, more languages, marked user-facing strings, and SARIF. Each expansion must define its own extraction, privacy, accounting, and edit-safety contracts. Automatic edits based on confidence and general-purpose agent tool execution remain outside this design.
+Evaluate an optional reviewer pass that can accept/reject existing proposals, with its own budget reservation; require a measured improvement before enabling it. Consider changed-file scanning using local content-hash snapshots (never Git history/status), persistent baselines, inference caching, local models/custom endpoints, more languages, marked user-facing strings, and SARIF. Each expansion must define its own extraction, privacy, accounting, and edit-safety contracts. Confidence-only editing and general-purpose agent tool execution remain outside this design.
 
 ## 10. Technical references
 
@@ -338,26 +333,43 @@ References checked during design; reverify version-specific APIs at implementati
 
 ## 11. Phase 0 implementation evidence
 
-Recorded 2026-09-20. Phase 0 is **complete**: implementation, contracts, and
-packed-install checks passed on macOS arm64 and Linux arm64. Windows testing was
+Recorded 2026-09-20. The original Phase 0 baseline passed implementation, contract, and
+packed-install checks on macOS arm64 and Linux arm64. Windows testing was
 removed from required qualification at the user's request on 2026-09-20; it remains
 unverified. This does not claim coverage of other CPU architectures or Linux distributions.
-Phase 0 verification used no live inference or npm publication. GitHub repository
-creation and the initial commit/push are separately authorized repository setup.
+The revised Phase 0 also passed on both targets on 2026-09-20 with Node 24.14.1:
+`npm run check` (24 tests and eight parser probes), `npm run test:pack`, and
+`npm run test:linux` (Docker Linux arm64 checks plus local/global packed installs
+with networking disabled after dependency/cache preparation). No live inference,
+publication, commits, or pushes were performed for this revision.
+
+The revision replaces concurrency/request/token/storage configuration with
+`maxAgents` (default 32), adds hidden-path opt-in and explicit root config/separate log paths,
+removes saved-selection/application-journal contracts, introduces a separate
+source-free log summary, and bundles dated model suggestions. Parser probes now
+run through `npm run probe` / `dist/probes/offline.js`, outside the product CLI.
+Regression tests cover rejected legacy config keys, valid/invalid agent ceilings,
+hidden defaults/override, excluded source-bearing log fields, and unavailable CLI
+commands. `init` and `run` remain later-phase work; no new runtime feature or live
+model qualification is implied by these contract checks.
+
+The subsequent config-location correction restores root-level `.spellagentrc.json`
+and keeps logs in `.spellagent/logs/`. Host checks and offline packed installs
+passed again; Linux was not rerun for this path-constant/documentation correction.
 
 ### Delivered foundation
 
 - One private MIT-licensed npm package, strict TypeScript ESM, Node.js 24 minimum,
-  pinned dependencies and lockfile, an executable CLI with help/version/offline probe.
-- Versioned Zod contracts for config, snapshots, segments/source maps, findings,
-  per-segment coverage, usage, runs, and application journals; typed lifecycle events.
+  pinned dependencies and lockfile, an executable CLI with help/version and a separate developer-only offline probe.
+- Versioned Zod contracts for config, snapshots, segments/source maps, ephemeral findings/runs,
+  per-segment coverage, usage, and source-free run-log summaries; typed lifecycle events.
   Schemas establish data shapes and basic invariants. They are not a substitute for
   the filesystem, cross-reference, source-map, and patch validation required in later phases.
 - A deterministic fake provider and AI SDK transport probes for direct OpenAI,
   direct Anthropic, and Vercel AI Gateway. Mocked HTTP exercises each real adapter,
   schema output, required options, usage, and disabled SDK retries. Complete JSON
   survives item-schema failure via `NoObjectGeneratedError.text`; malformed JSON is
-  rejected. These are untrusted transport results, not selectable findings. Proposal
+  rejected. These are untrusted transport results, not application-ready findings. Proposal
   salvage, coverage aggregation, budgets, and production adapter qualification remain Phase 2.
 - An optional explicit `--allow-paid` smoke command, with existing environment keys,
   a synthetic sentence, one client dispatch, 512 maximum output tokens, and a
@@ -373,7 +385,7 @@ creation and the initial commit/push are separately authorized repository setup.
 
 | Gate | Result |
 | --- | --- |
-| Strict typecheck and offline tests | Passed: 22 tests on both macOS arm64 and Linux arm64 / Node 24.14.1 |
+| Strict typecheck and offline tests | Passed: 24 tests on both macOS arm64 and Linux arm64 / Node 24.14.1 |
 | JS, TS, TSX, Python, Java, Go, Rust WASM compatibility | Passed with Unicode and LF/CRLF fixtures |
 | Exact source-byte mapping | Passed: accented text, emoji, combining characters, CRLF; surrogate-splitting offsets rejected |
 | Markdown/GFM positions | Passed for Unicode/CRLF paragraph and table fixtures |
@@ -410,7 +422,7 @@ Run `npm run test:linux` with Docker running. The development script uses the of
 The recorded run used Linux aarch64, Node 24.14.1, and npm 11.11.0 on Docker Desktop.
 
 Source inputs are copied without macOS extended attributes or AppleDouble sidecars.
-No host `node_modules`, credentials, saved runs, or version-control metadata are copied.
+No host `node_modules`, credentials, run logs, or version-control metadata are copied.
 A temporary volume holds the Linux installation and npm cache. Network access is
 available only for initial image/dependency/cache preparation; a second container
 runs `npm run check` and `npm run test:pack` with `--network none`. Both containers
@@ -427,7 +439,7 @@ Recorded offline result:
 ```text
 Platform: linux/arm64; Node v24.14.1; npm 11.11.0
 Strict typecheck and build: passed
-Test files: 4 passed; tests: 22 passed
+Test files: 4 passed; tests: 24 passed
 Parser probes: 8 passed (7 code grammars and Markdown)
 Local and global packed installs: passed
 Production-only dependencies: passed
@@ -464,6 +476,4 @@ license; copied grammar assets carry licenses in `assets/licenses/`.
 | `vitest` | 5.0.1 | MIT | Development/build only |
 | `@ai-sdk/gateway` (via `ai` export) | 4.0.87 | Apache-2.0 | Runtime transitive adapter |
 
-Ink/React are deferred until Phase 3 so a feasibility build does not carry unused UI
-runtime dependencies. Discovery, generated-file exclusion, prose protection,
-application/recovery, and production scanning are not implemented in Phase 0.
+No Ink/React dependency is needed for a removed review UI. Interactive setup, discovery, generated-file exclusion, prose protection, automatic application, logging, and production scheduling/inference are not implemented in Phase 0.

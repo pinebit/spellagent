@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run build && npm test && npm run probe",
-    "probe": "node dist/cli/index.js probe",
+    "probe": "node dist/probes/offline.js",
     "test:pack": "node scripts/test-pack.mjs",
     "smoke:live": "node dist/probes/live.js",
     "prepack": "npm run build",

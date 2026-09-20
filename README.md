@@ -1,8 +1,23 @@
 # SpellAgent
 
-A local CLI for reviewing spelling and grammar corrections in documentation and
-source comments. **Phase 0 feasibility build:** parser probes and contracts exist;
-`init`, scanning, review, and application are planned in [the implementation plan](docs/plan.md).
+A local CLI for correcting spelling and grammar in documentation and source comments.
+**Phase 0 feasibility build:** parser probes and contracts exist; interactive `init`
+and automatic `run` are planned in [the implementation plan](docs/plan.md).
+They are not implemented yet.
+
+The planned workflow has only two commands: `spellagent init` and `spellagent run`.
+Setup is always interactive and writes `.spellagentrc.json`. A run requires
+that configuration, applies validated corrections without review/apply prompts,
+and leaves you to inspect the resulting local changes. Existing modifications are
+valid input; files changed during a run are protected by freshness checks.
+`run --dry-run` will preview scope offline without changing source.
+
+Hidden files/directories are excluded by default; `includeHidden` opts eligible
+hidden paths into scope, while safety exclusions still apply. Setup offers a
+low-cost model for the explicitly selected connection and a configurable
+`limits.maxAgents` ceiling (default 32). Account/model rate limits can reduce actual
+parallelism. Config stays at the root; only source-free run logs persist under `.spellagent/`;
+there are no saved results, review/apply/run-management commands, or retention setting.
 
 ## Development
 
@@ -28,10 +43,10 @@ build and pack explicitly, since lifecycle scripts are disabled.
 
 ```sh
 node dist/cli/index.js --help
-node dist/cli/index.js probe
+npm run probe
 ```
 
-`probe` parses fixed synthetic fixtures for JavaScript, TypeScript, TSX, Python,
+`npm run probe` runs a separate developer entry point and parses fixed synthetic fixtures for JavaScript, TypeScript, TSX, Python,
 Java, Go, Rust, and Markdown. It does not scan the current directory or modify source.
 With Docker running, verify Linux in isolated containers:
 
@@ -64,7 +79,12 @@ See the [AI SDK Gateway documentation](https://ai-sdk.dev/providers/ai-sdk-provi
 Use only the key for your selected connection. `.env.example` lists the names;
 `.env` is ignored and is not automatically loaded. Future `--env-file` support
 belongs to Phase 1. Initialization and dry-run will stay offline for every connection,
-including Gateway. Pricing remains explicitly supplied by the user.
+including Gateway. Pricing remains explicitly supplied by the user. Bundled setup suggestions are
+OpenAI `gpt-5.4-nano`, Anthropic `claude-haiku-4-5-20251001`, and Gateway
+`openai/gpt-5.4-nano` with an explicitly confirmed OpenAI route. You can override
+the model during setup. These are low-cost candidates awaiting live and quality
+qualification, not measured workload winners. See the dated sources and gates in
+[the model selection plan](docs/plan.md#model-suggestions-and-scheduling).
 
 An optional smoke test sends only a fixed synthetic sentence. It performs one
 request, disables SDK retries, sets a 512-token output limit and a 30-second timeout,

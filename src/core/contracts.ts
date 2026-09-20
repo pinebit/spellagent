@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 export const SCHEMA_VERSION = 1 as const;
+export const PROJECT_DIRECTORY = '.spellagent' as const;
+export const CONFIG_PATH = '.spellagentrc.json' as const;
+export const RUN_LOG_DIRECTORY = '.spellagent/logs' as const;
+export const DEFAULT_MAX_AGENTS = 32 as const;
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const count = z.number().int().nonnegative().safe();
@@ -25,18 +29,16 @@ export const configSchema = z.strictObject({
   language: z.literal('en').default('en'),
   dialect: z.enum(['en-US', 'en-GB']).default('en-US'),
   include: z.array(z.string().min(1)).default(['**/*.md', '**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,py,pyi,java,go,rs}']),
+  includeHidden: z.boolean().default(false),
   exclude: z.array(z.string().min(1)).default([]),
   glossary: z.array(z.string().min(1)).default([]),
   provider: providerConfigSchema,
   limits: z.strictObject({
-    maxFileBytes: positive.default(1048576), maxRequests: positive.default(100),
-    maxInputTokensPerRequest: positive.default(6000), maxOutputTokensPerRequest: positive.default(2000),
-    concurrency: positive.default(2), timeoutMs: positive.default(60000),
+    maxFileBytes: positive.default(1048576), maxAgents: positive.default(DEFAULT_MAX_AGENTS), timeoutMs: positive.default(60000),
     maxRetries: count.max(2).default(2), maxEstimatedUsd: usd.nullable().default(null),
   }).prefault({}),
   pricing: z.strictObject({ inputUsdPerMillionTokens: usd, outputUsdPerMillionTokens: usd,
     asOf: z.iso.date() }).nullable().default(null),
-  storage: z.strictObject({ retentionDays: positive.default(7) }).prefault({}),
 }).refine(config => config.limits.maxEstimatedUsd === null || config.pricing !== null,
   { path: ['pricing'], message: 'A dollar budget requires explicit dated pricing' });
 export type Config = z.infer<typeof configSchema>;
@@ -76,8 +78,8 @@ export type BatchRequest = z.infer<typeof batchRequestSchema>;
 
 export const findingSchema = z.strictObject({
   id, segmentId: id, snapshotId: id, range: byteRangeSchema,
-  ...proposalSchema.shape, validationVersion: z.string().min(1), selected: z.boolean(),
-  disposition: z.enum(['available', 'dismissed', 'applied']), notices: z.array(z.string()),
+  ...proposalSchema.shape, validationVersion: z.string().min(1),
+  disposition: z.enum(['available', 'applied']), notices: z.array(z.string()),
 });
 export type Finding = z.infer<typeof findingSchema>;
 export const coverageSchema = z.strictObject({
@@ -90,6 +92,7 @@ export const usageSchema = z.strictObject({
   estimatedInputTokens: count, estimatedOutputTokens: count,
   knownUsd: usd.nullable(), estimatedUsd: usd.nullable(),
 });
+// Ephemeral state only: never serialize snapshots, findings, or source excerpts to disk.
 export const runSchema = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION), id,
   projectRoot: z.string().min(1), toolVersion: z.string().min(1),
@@ -102,17 +105,24 @@ export const runSchema = z.strictObject({
 }).refine(run => run.status !== 'completed' || run.coverage.every(entry => entry.state === 'reviewed'),
   'Completed runs cannot contain unresolved coverage');
 export type Run = z.infer<typeof runSchema>;
-export const applyJournalSchema = z.strictObject({
-  schemaVersion: z.literal(SCHEMA_VERSION), runId: id, selectedFindingIds: z.array(id),
-  files: z.array(z.strictObject({ path: relativePathSchema, beforeSha256: hash,
-    afterSha256: hash, backupPath: relativePathSchema,
-    state: z.enum(['prepared', 'replaced', 'restored']),
+// Durable audit summary, deliberately incapable of storing replayable corrections.
+export const runLogSchema = z.strictObject({
+  schemaVersion: z.literal(SCHEMA_VERSION), id,
+  provider: providerConfigSchema,
+  startedAt: z.iso.datetime(), finishedAt: z.iso.datetime(),
+  status: z.enum(['completed', 'incomplete', 'cancelled', 'failed']),
+  usage: usageSchema,
+  counts: z.strictObject({ files: count, reviewedSegments: count, unresolvedSegments: count,
+    findings: count, applied: count }),
+  files: z.array(z.strictObject({ path: relativePathSchema,
+    beforeSha256: hash, afterSha256: hash.nullable(),
+    state: z.enum(['unchanged', 'prepared', 'replaced', 'conflict', 'failed']),
   })),
 });
-export type ApplyJournal = z.infer<typeof applyJournalSchema>;
+export type RunLog = z.infer<typeof runLogSchema>;
 export type CoreEvent =
   | { type: 'fileSkipped'; path: string; reason: string }
   | { type: 'batchCompleted'; batchId: string; coverage: SegmentCoverage[] }
   | { type: 'findingValidated'; finding: Finding }
   | { type: 'runFinished'; runId: string; status: Run['status'] };
-export const EXIT_CODES = { success: 0, findings: 1, incomplete: 2, cancelled: 130 } as const;
+export const EXIT_CODES = { success: 0, incomplete: 2, cancelled: 130 } as const;

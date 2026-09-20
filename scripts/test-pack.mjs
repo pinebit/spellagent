@@ -36,7 +36,8 @@ try {
   const run = args => execFileSync(process.execPath, [cli, ...args], { cwd: temporary, encoding: 'utf8' });
   assert.match(run(['--help']), /Phase 0/);
   assert.equal(run(['--version']).trim(), '0.0.0');
-  const report = JSON.parse(run(['probe']));
+  const report = JSON.parse(execFileSync(process.execPath, [path.join(packageRoot, 'dist/probes/offline.js')],
+    { cwd: temporary, encoding: 'utf8' }));
   assert.equal(report.parsers.length, 8);
   const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   assert.equal(manifest.bin.spellagent, 'dist/cli/index.js');
@@ -51,8 +52,7 @@ try {
   npm(['install', '--global', '--prefix', globalPrefix, '--offline', '--ignore-scripts',
     '--no-audit', '--no-fund', path.join(temporary, packed.filename)], temporary);
   const globalPackage = path.join(globalPrefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules', 'spellagent');
-  const globalCli = path.join(globalPackage, 'dist', 'cli', 'index.js');
-  assert.equal(JSON.parse(execFileSync(process.execPath, [globalCli, 'probe'], { cwd: temporary, encoding: 'utf8' })).parsers.length, 8);
+  assert.equal(JSON.parse(execFileSync(process.execPath, [path.join(globalPackage, 'dist/probes/offline.js')], { cwd: temporary, encoding: 'utf8' })).parsers.length, 8);
   if (process.platform !== 'win32') {
     assert.equal(execFileSync(path.join(globalPrefix, 'bin', 'spellagent'), ['--version'], { cwd: temporary, encoding: 'utf8' }).trim(), '0.0.0');
   } else {
