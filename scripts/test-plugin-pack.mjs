@@ -83,7 +83,17 @@ try {
     await writeFile(path.join(project, 'notes.md'), source);
     const discovery = run({ protocolVersion: 2, operation: 'discover', root: project });
     assert.equal(discovery.summary.filesEligible, 1);
+    assert.equal(discovery.summary.filesConsidered, 1);
+    assert.equal(discovery.summary.byFormat.markdown.files, 1);
+    assert.equal(discovery.summary.narrowCoverage, false);
     assert.equal(discovery.summary.reviewedSegments, 0);
+    assert.deepEqual(discovery.effectiveScope, { root: project, targets: ['.'], dialect: 'en-US', includeHidden: false, glossary: [] });
+    const invalidGlossary = spawnSync(process.execPath, [helper], { cwd, env,
+      input: JSON.stringify({ protocolVersion: 2, operation: 'discover', root: project,
+        preferences: { glossary: ['valid', ''] } }), encoding: 'utf8' });
+    assert.equal(invalidGlossary.status, 2);
+    assert.deepEqual(JSON.parse(invalidGlossary.stdout), { ok: false, protocolVersion: 2,
+      code: 'invalid_glossary', invalidGlossaryIndexes: [1] });
     const extraction = run({ protocolVersion: 2, operation: 'extract', root: project, path: 'notes.md',
       policyHash: discovery.policyHash, snapshotHash: discovery.items[0].snapshot.sha256 });
     assert.equal(extraction.snapshot.bom, true);

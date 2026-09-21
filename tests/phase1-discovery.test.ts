@@ -35,6 +35,6 @@ describe('migrated discovery protection fixtures', () => {
     ]));
     expect(await readFile(path.join(root, '.git', 'config'), 'utf8')).toBe('must not be read');
     const explicit = await discover({ root, paths: ['file.pb.go'], preferences });
-    expect(explicit).toEqual([{ path: 'file.pb.go', state: 'skipped', code: 'generated_path' }]);
+    expect(explicit).toEqual([{ path: 'file.pb.go', pathType: 'unknown', state: 'skipped', code: 'generated_path' }]);
   });
 });

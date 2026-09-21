@@ -81,11 +81,16 @@ export function extractMarkdown(input: ExtractInput): ExtractionResult {
   };
   visit(root, []);
   const segments = [];
+  let suppressedSegments = 0;
   const notices = new Set<string>();
   for (const range of ranges.sort((a, b) => a.start - b.start)) {
     const line = displayPosition(input.source, range.start).line;
     const text = input.source.slice(range.start, range.end);
-    if (policy.disabled.has(line) || (frontmatter !== undefined && range.start < frontmatter)) continue;
+    if (policy.disabled.has(line)) {
+      if (/\p{L}/u.test(text)) suppressedSegments += 1;
+      continue;
+    }
+    if (frontmatter !== undefined && range.start < frontmatter) continue;
     if (/\{#[A-Za-z][^}]*\}|\\[^\p{L}\p{N}\s]|&(?:#\d+|#x[0-9a-f]+|[a-z]+);/iu.test(text)) {
       protectedLines.add(line); continue;
     }
@@ -97,5 +102,5 @@ export function extractMarkdown(input: ExtractInput): ExtractionResult {
   }
   const diagnostics = [...policy.diagnostics, ...[...protectedLines].sort((a, b) => a - b).map(line => ({ code: 'protected_markdown_construct', line }))];
   if (frontmatter !== undefined) diagnostics.unshift({ code: 'protected_frontmatter', line: 1 });
-  return { segments, diagnostics, notices: [...notices] };
+  return { segments, suppressedSegments, diagnostics, notices: [...notices] };
 }

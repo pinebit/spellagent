@@ -7,6 +7,7 @@ export type ExtractionDiagnostic = {
 
 export type ExtractionResult = {
   segments: Segment[];
+  suppressedSegments: number;
   diagnostics: ExtractionDiagnostic[];
   notices: string[];
 };

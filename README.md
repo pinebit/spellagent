@@ -10,7 +10,7 @@ The maintained design is [docs/plan.md](docs/plan.md).
 
 ## Current status
 
-Phase B's read-only offline engine passed offline verification on macOS/Linux arm64:
+Phase B's read-only offline engine and expanded preview contract passed offline verification on macOS/Linux arm64:
 optional preferences, local discovery, paged extraction, coverage accounting, and
 scope preview. It does not proofread or correct project files yet. The retired
 CLI and provider integration have been removed.
@@ -24,7 +24,9 @@ Nothing is published automatically.
 
 The planned user experience is one `check` skill: `/spellagent:check` in Claude
 Code and the corresponding installed skill in Codex. Normal invocation will
-apply validated corrections one file at a time; preview will remain read-only.
+apply validated corrections one file at a time; a plain preview is an offline
+scope inventory, while a future single-file correction preview will use a model
+without writing source.
 Optional preferences cover dialect, scope, hidden paths, and glossary.
 Existing local modifications are allowed. English en-US/en-GB and macOS/Linux
 are the intended initial scope; Windows remains untested.
@@ -94,9 +96,11 @@ extend project values. Old provider/limit configurations fail with migration
 guidance and remain unchanged. See [protocol and preferences](docs/phase-b.md).
 
 The installed helper accepts version-2 discover/extract requests over stdin.
-Preview reports eligible, skipped, failed, and unchecked coverage with zero
-files changed. Symlinks, hard links, mandatory exclusions, unsupported encodings,
-and files over 1 MiB are excluded. Version-1 synthetic fixtures remain available
+Preview reports effective settings, per-format eligible coverage, reason-grouped
+skips/failures, suppressed and unchecked coverage, and zero files changed. It
+explains empty or unexpectedly narrow scope; `.txt` is explicitly unsupported in
+v1. Symlinks, hard links, mandatory exclusions, unsupported encodings, and files
+over 1 MiB are excluded. Version-1 synthetic fixtures remain available
 for deferred host feasibility evaluations.
 
 Claude tests are currently deferred by user instruction. Package checks default

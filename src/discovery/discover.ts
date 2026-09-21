@@ -16,8 +16,10 @@ export const sha256 = (value: string | Buffer) => createHash('sha256').update(va
 const order = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 export type DiscoveryEntry = {
   path: string; state: 'eligible' | 'skipped' | 'failed'; code?: string;
+  pathType: 'file' | 'directory' | 'other' | 'unknown';
   snapshot?: FileSnapshot;
-  coverage?: { extractedSegments: number; eligibleSegments: number; skippedSegments: number; diagnostics: number; notices: number };
+  coverage?: { extractedSegments: number; eligibleSegments: number; skippedSegments: number;
+    suppressedSegments: number; diagnostics: number; notices: number };
 };
 
 const generatedMarkers: readonly { id: string; regex: RegExp }[] = [
@@ -76,7 +78,8 @@ export async function extractLocalFile(root: string, relative: string, preferenc
   const policy = pathPolicy(relative, preferences);
   if (policy) throw new HelperError(policy);
   const format = formatForPath(relative);
-  if (!format) throw new HelperError('unsupported_format');
+  if (!format) throw new HelperError(path.posix.extname(relative).toLowerCase() === '.txt'
+    ? 'plain_text_unsupported' : 'unsupported_format');
   if (!firstGlobMatch(relative, compileGlobs(preferences.include))) throw new HelperError('not_included');
   const bytes = await readLocalFile(targetPath(root, relative), MAX_FILE_BYTES);
   if (bytes.includes(0)) throw new HelperError('binary');
@@ -97,16 +100,17 @@ export async function extractLocalFile(root: string, relative: string, preferenc
     coverage: { extractedSegments: extraction.segments.length,
       eligibleSegments: prepared.filter(item => item.kind === 'segment').length,
       skippedSegments: prepared.filter(item => item.kind === 'skipped').length,
+      suppressedSegments: extraction.suppressedSegments,
       diagnostics: extraction.diagnostics.length, notices: extraction.notices.length },
   };
 }
 
 const skips = new Set(['hidden_path', 'mandatory_directory', 'mandatory_file', 'credential_file', 'generated_path',
-  'generated_marker', 'config_exclude', 'not_included', 'unsupported_format', 'symlink', 'hard_link',
+  'generated_marker', 'config_exclude', 'not_included', 'unsupported_format', 'plain_text_unsupported', 'symlink', 'hard_link',
   'too_large', 'binary', 'invalid_utf8', 'unsafe_path', 'not_regular_file']);
-function failure(relative: string, error: unknown): DiscoveryEntry {
+function failure(relative: string, error: unknown, pathType: DiscoveryEntry['pathType'] = 'unknown'): DiscoveryEntry {
   const code = error instanceof HelperError ? error.code : 'read_failed';
-  return { path: relative, state: skips.has(code) ? 'skipped' : 'failed', code };
+  return { path: relative, pathType, state: skips.has(code) ? 'skipped' : 'failed', code };
 }
 
 // Reconstruct a source-free manifest on each request. Only one source file is
@@ -120,14 +124,14 @@ export async function discover(options: { root: string; paths: readonly string[]
     visited.add(relative);
     if (visited.size > 100_000 || depth > 128) throw new HelperError('scope_too_large');
     const policy = relative === '.' ? undefined : pathPolicy(relative, options.preferences);
-    if (policy) { entries.set(relative, { path: relative, state: 'skipped', code: policy }); return; }
+    if (policy) { entries.set(relative, { path: relative, pathType: 'unknown', state: 'skipped', code: policy }); return; }
     const absolute = targetPath(options.root, relative);
     let inspected;
     try { inspected = await inspectPath(absolute); }
     catch (error) { entries.set(relative, failure(relative, error)); return; }
     if (inspected.info.isDirectory()) {
       if (relative !== '.' && firstGlobMatch(`${relative}/`, compileGlobs(options.preferences.exclude))) {
-        entries.set(relative, { path: relative, state: 'skipped', code: 'config_exclude' }); return;
+        entries.set(relative, { path: relative, pathType: 'directory', state: 'skipped', code: 'config_exclude' }); return;
       }
       let names: string[];
       try {
@@ -136,18 +140,18 @@ export async function discover(options: { root: string; paths: readonly string[]
         await assertChain(inspected.chain);
       } catch (error) {
         if (error instanceof HelperError && error.code === 'scope_too_large') throw error;
-        entries.set(relative, failure(relative, error)); return;
+        entries.set(relative, failure(relative, error, 'directory')); return;
       }
       for (const name of names.sort(order)) await visit(relative === '.' ? name : `${relative}/${name}`, depth + 1);
       return;
     }
     if (!inspected.info.isFile()) {
-      entries.set(relative, { path: relative, state: 'skipped', code: 'not_regular_file' }); return;
+      entries.set(relative, { path: relative, pathType: 'other', state: 'skipped', code: 'not_regular_file' }); return;
     }
     try {
       const file = await extractLocalFile(options.root, relative, options.preferences);
-      entries.set(relative, { path: relative, state: 'eligible', snapshot: file.snapshot, coverage: file.coverage });
-    } catch (error) { entries.set(relative, failure(relative, error)); }
+      entries.set(relative, { path: relative, pathType: 'file', state: 'eligible', snapshot: file.snapshot, coverage: file.coverage });
+    } catch (error) { entries.set(relative, failure(relative, error, 'file')); }
   };
   for (const relative of [...new Set(options.paths.length ? options.paths : ['.'])].sort(order)) await visit(relative, 0);
   await assertChain(rootIdentity.chain);

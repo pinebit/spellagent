@@ -30,7 +30,10 @@ it('works without configuration, never claims reviewed coverage, and creates no 
   const source = '\uFEFF# Existing local prose\r\n\r\nA sentense without final newline';
   await writeFile(path.join(root, 'notes.md'), source);
   const result = await discover(root);
-  expect(result.summary).toMatchObject({ filesEligible: 1, reviewedSegments: 0, filesChanged: 0 });
+  expect(result.summary).toMatchObject({ filesEligible: 1, filesConsidered: 1, eligibleSegments: 2,
+    suppressedSegments: 0, narrowCoverage: false, reviewedSegments: 0, filesChanged: 0 });
+  expect(result.summary.byFormat).toMatchObject({ markdown: { files: 1, eligibleSegments: 2 } });
+  expect(result.effectiveScope).toEqual({ root, targets: ['.'], dialect: 'en-US', includeHidden: false, glossary: [] });
   const page = await extract(root, 'notes.md');
   expect(page.snapshot).toMatchObject({ bom: true, eol: 'crlf' });
   expect(page.items.some(item => item.kind === 'notice' && item.code === 'anchor_may_change')).toBe(true);
@@ -47,6 +50,9 @@ it('merges scope overrides while retaining project exclusions and case-sensitive
   await mkdir(path.join(root, 'private'));
   await writeFile(path.join(root, 'private/note.md'), 'Secret prose.');
   await expect(extract(root, 'private/note.md', { preferences: { exclude: [] } })).rejects.toThrow('config_exclude');
+  await expect(discover(root, { preferences: { glossary: ['valid', ''] } })).rejects.toMatchObject({
+    code: 'invalid_glossary', details: { invalidGlossaryIndexes: [1] },
+  });
 });
 
 it('fails legacy and unknown preferences before enumerating or changing files', async () => {
@@ -65,9 +71,9 @@ it('enforces directory-only exclusions for both traversal and explicit descendan
   await writeFile(path.join(root, 'private/note.md'), 'Excluded prose.');
   const preferences = { exclude: ['private/'] };
   const walked = await discover(root, { preferences });
-  expect(walked.items).toEqual([{ path: 'private', state: 'skipped', code: 'config_exclude' }]);
+  expect(walked.items).toEqual([{ path: 'private', pathType: 'directory', state: 'skipped', code: 'config_exclude' }]);
   const explicit = await discover(root, { targets: ['private/note.md'], preferences });
-  expect(explicit.items).toEqual([{ path: 'private/note.md', state: 'skipped', code: 'config_exclude' }]);
+  expect(explicit.items).toEqual([{ path: 'private/note.md', pathType: 'unknown', state: 'skipped', code: 'config_exclude' }]);
   await expect(extract(root, 'private/note.md', { preferences })).rejects.toThrow('config_exclude');
 });
 
@@ -184,6 +190,23 @@ it('keeps generated detection syntax-aware and records invalid encodings and par
     expect.objectContaining({ path: 'broken.ts', state: 'failed', code: 'parse_failed' }),
   ]));
   expect(result.status).toBe('incomplete');
+  expect(result.summary.skippedByReason).toMatchObject({ generated_marker: 1, invalid_utf8: 1, binary: 1, too_large: 1 });
+  expect(result.summary.failedByReason).toEqual({ parse_failed: 1 });
+});
+
+it('explains empty and narrow scope, including unsupported text files', async () => {
+  const root = await project();
+  await writeFile(path.join(root, 'notes.txt'), 'Plain prose is intentionally unsupported.');
+  const empty = await discover(root);
+  expect(empty).toMatchObject({ status: 'no_eligible_text', noEligibleTextReason: 'no_supported_file_types' });
+  expect(empty.summary).toMatchObject({ filesEligible: 0, filesConsidered: 1, narrowCoverage: true,
+    skippedByReason: { plain_text_unsupported: 1 } });
+  expect(empty.items).toContainEqual(expect.objectContaining({ path: 'notes.txt', pathType: 'file',
+    state: 'skipped', code: 'plain_text_unsupported' }));
+
+  for (let index = 0; index < 3; index += 1) await writeFile(path.join(root, `eligible-${index}.md`), 'Eligible prose.');
+  for (let index = 0; index < 7; index += 1) await writeFile(path.join(root, `unsupported-${index}.txt`), 'Unsupported prose.');
+  expect((await discover(root)).summary).toMatchObject({ filesEligible: 3, filesConsidered: 11, narrowCoverage: true });
 });
 
 it('pages diagnostics as well as prose and rejects source-bearing or write requests', async () => {
@@ -215,9 +238,13 @@ it('preserves glossary byte ranges and syntax-aware suppression through discover
   const preferences = await loadPreferences(root, { glossary: ['SpellAgent'] });
   const result = await extractLocalFile(root, 'note.ts', preferences);
   expect(result.segments).toHaveLength(1);
+  expect(result.coverage.suppressedSegments).toBe(1);
   const segment = result.segments[0]!;
   expect(segment.editableText).not.toContain('Suppressed');
   const protectedText = segment.protectedRanges.map(range => Buffer.from(result.source).subarray(range.startByte, range.endByte).toString('utf8'));
   expect(protectedText).toContain('SpellAgent');
   expect(protectedText).not.toContain('spellagent');
+  const preview = await discover(root, { preferences: { glossary: ['SpellAgent'] } });
+  expect(preview.summary.suppressedSegments).toBe(1);
+  expect(preview.effectiveScope.glossary).toEqual(['SpellAgent']);
 });

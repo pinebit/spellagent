@@ -22,6 +22,7 @@ try {
   // Never echo input, parser exceptions, stack traces, or filesystem paths.
   const code = error instanceof ProtocolError ? error.code : 'extraction_failed';
   process.stdout.write(JSON.stringify({ ok: false, protocolVersion: PROTOCOL_VERSION, code,
+    ...(error instanceof ProtocolError ? error.details : {}),
     ...(code === 'preferences_migration_required' ? { guidance: MIGRATION_GUIDANCE } : {}) }) + '\n');
   process.exitCode = 2;
 }

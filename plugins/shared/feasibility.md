@@ -27,6 +27,9 @@ or use workspace tools to infer whether files changed.
 Entry: the user requested the feasibility preview or live evaluation.
 
 1. State that only bundled synthetic data will be processed and nothing edited.
+   Before a model-backed evaluation, also state that the selected host model will
+   process that synthetic prose and the host or organization may retain it under
+   its policies. Extraction-only mode sends nothing to a proofreading model.
 2. Use the installed helper path supplied by the wrapper. Require Node.js 24+.
 3. Send `{"protocolVersion":1,"operation":"list-fixtures"}` to helper stdin.
    A safe POSIX example for this fixed request is:
@@ -73,8 +76,10 @@ Entry: extraction/evaluation has ended or encountered a blocker.
 
 1. Check that extracted plus skipped records equal totalSegments for each complete
    fixture. Distinguish extracted text from model-reviewed text.
-2. Return fixture/page/segment counts, skips, diagnostics, incomplete work, and
-   proposed correction counts if evaluated. Always state zero files changed.
+2. Lead with the result, then return fixture/page/segment counts, skips,
+   diagnostics, incomplete work, and proposed correction counts if evaluated.
+   Always state zero files changed; do not lead a successful run with incidental
+   skips.
 3. Report requested model and effective model only when exposed by the host;
    otherwise state unverified. Never infer a host/platform pass from instruction
    text or claim proofreading quality is qualified by these synthetic examples.

@@ -1,7 +1,8 @@
 # Phase A implementation and verification handoff
 
 Historical Phase A handoff; see plan.md section 15 for the subsequent
-qualification attempt, Phase B changes, and user-directed Claude deferral.
+qualification attempt, Phase B changes, user-directed Claude deferral, and the
+2026-09-21 UX reconciliation candidate.
 
 Status at the original handoff: implementation candidate, 2026-09-21. macOS/Linux arm64 offline checks,
 packaged extraction, Codex manifest/skill validation, and Claude manifest validation
@@ -9,6 +10,14 @@ passed; live host gates remain unresolved.
 [plan.md](plan.md#14-adoption-and-phase-a-status) records the
 verification evidence and remains the governing design. No host installation or
 live model evaluation has been performed.
+
+The later UX reconciliation updates the packaged skill sources to distinguish
+offline scope preview from model-backed fixture evaluation, disclose host retention
+before model use, lead reports with outcomes, provide copyable invocation examples,
+and make unavailable-model failures actionable without guessing an alternative.
+The updated package passed the offline isolated Codex package check on macOS and
+Linux arm64 later that day. It has not received an installed-host verification
+pass; the historical host-gate limits below still apply.
 
 ## Scope
 
@@ -127,6 +136,9 @@ For each host/platform:
    requests haiku and foreground return. Record the effective model if exposed.
    Unknown effective identity is unverified, not a pass. Exercise user override,
    unavailable model, and organizational policy substitution without fallback.
+   The stop response must name the requested choice, host-visible reason, and
+   configured default. Give a copyable retry with an exposed available model, or
+   point to the relevant host model selector without inventing a model name.
 4. Confirm summary reaches the invoking turn, zero source writes, no nested
    delegation, and correct disclosure of the deliberately skipped fixture.
 5. Record OS/architecture, Node/client versions, requested/effective model,

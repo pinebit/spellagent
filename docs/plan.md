@@ -1,6 +1,6 @@
 # SpellAgent: Plugin Product and Implementation Plan
 
-Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B read-only implementation candidate; editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals.
+Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B's read-only engine and expanded preview UX passed their recorded offline checks. Editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals.
 
 ## 1. Product direction
 
@@ -24,7 +24,7 @@ There is no standalone SpellAgent CLI, service, API integration, or mandatory in
 
 - English spelling and grammar; `en-US` by default, with `en-GB` available.
 - Minimal corrections that preserve meaning, voice, and technical terminology.
-- One worker per invocation; no nested delegation or parallel file editing in v1.
+- One proofreading agent per invocation (called the worker internally); no nested delegation or parallel file editing in v1.
 - Optional project preferences, with safe defaults when absent.
 - Node.js 24 or newer required.
 - No translation, stylistic rewriting, identifier renaming, or factual correction.
@@ -35,26 +35,55 @@ These defaults guide implementation and remain revisable; they are not measured 
 
 Expose one proofreading skill per plugin. In Claude Code, a plugin named `spellagent` with a skill named `check` provides `/spellagent:check`. Codex exposes the corresponding installed skill through its skill picker.
 
-Users can request:
+Users can request three distinct modes:
 
-- Correction of specific files or directories.
-- Correction of the current working directory.
-- An offline scope preview.
-- A dialect or additional glossary terms for that invocation.
+| Mode | Purpose | Uses a model | Writes source |
+| --- | --- | --- | --- |
+| Correct | Review and apply validated corrections to specific files, directories, or the current working directory | Yes | Yes |
+| Scope preview | Show what would be reviewed and why other content would be skipped | No | No |
+| Correction preview | Review one explicitly named file and show validated proposed corrections without applying them | Yes | No |
 
-Normal invocation authorizes correction. Preview only enumerates files and extracts coverage information; it does not proofread or modify source.
+Normal invocation authorizes correction. “Preview” by itself means the offline scope preview. A correction preview, also described as a dry run, must name exactly one file so its cost and output stay understandable. It runs the same extraction and proposal validation used by correction mode, but it performs no replacement and does not save proposals for later application. A later correction invocation starts from a fresh snapshot.
+
+The conversational interface accepts ordinary requests; users do not need to learn helper flags. Host documentation provides copyable examples, including:
+
+- “Preview the scope of `docs/`.”
+- “Preview corrections for `README.md` without changing it.”
+- “Check `docs/` using en-GB; treat `SpellAgent` and `Tree-sitter` as glossary terms.”
+
+Claude Code documentation also shows the equivalent `/spellagent:check ...` forms. Codex documentation shows the equivalent skill-picker invocation. Host wrappers translate these requests into the versioned helper protocol; the helper is not a public CLI.
 
 The working directory is the default root. Explicitly requested roots are supported. All target paths must remain inside that root. Do not infer roots through Git or silently search parent directories.
 
-The final response reports:
+### Scope preview output
 
-- Files reviewed, changed, skipped, and failed.
-- Applied correction totals.
-- Unsupported or excluded content.
-- Incomplete processing and files remaining unchecked.
-- Relevant notices, including potentially changed Markdown heading anchors.
+The scope preview is a trust-building inventory, not just a file list. Lead with a compact result such as “142 prose segments found across 18 eligible files; 29 files skipped.” Then show:
 
-“No corrections found” applies only to successfully reviewed text. Empty scope is reported as “no eligible text,” not “all clear.”
+- Eligible file and segment counts, grouped by supported file type.
+- Per-file segment counts, with long lists collapsed behind a concise total when the host supports it.
+- Skipped and failed counts grouped by reason, with representative paths and a way to request the complete list.
+- Effective root, targets, dialect, hidden-path policy, and glossary terms.
+- Content that remains unchecked because extraction failed, output was truncated, or the preview was interrupted.
+
+An estimated review time may be shown only when it is derived from measured results for the effective host/model and is clearly labeled as an estimate. Otherwise omit it rather than inventing one.
+
+Prominently warn about unexpectedly narrow coverage when no files are eligible, or when fewer than half of at least ten considered files are eligible. The warning names the leading skip reasons and gives only applicable remedies. For example, suggest `includeHidden` when hidden paths account for exclusions, but never imply that it bypasses mandatory exclusions.
+
+“No eligible text” is not “all clear.” Pair it with the dominant reason: no supported file types, all candidates excluded, no extractable prose, all prose protected or suppressed, unsupported encoding, oversized files, or extraction failure. “No corrections found” applies only to text successfully reviewed by a proofreading model.
+
+### Correction and correction-preview output
+
+Lead the final response with the user outcome, not diagnostic ordering:
+
+1. Result: for example, “12 corrections applied across 4 files” or “7 validated corrections previewed for `README.md`; no files changed.”
+2. What changed: concise per-file totals and correction categories; correction preview additionally shows each original/replacement pair and reason.
+3. Needs attention: unchanged unresolved files, detected write conflicts, failures, and remaining unchecked content.
+4. Coverage: reviewed, unchanged, changed, skipped, and failed files and segments.
+5. Settings and notices: effective dialect and glossary, material format limitations, privacy reminder, and suppression help when useful.
+
+Never lead a successful run with incidental errors or skip counts. Never hide partial completion behind a success headline. Clearly state “no files changed” for both preview modes.
+
+If coverage is empty or unexpectedly narrow, use the same explanation and actionable skip breakdown as scope preview. If a false positive or rejected suggestion is present, point to the suppression syntax in the skill documentation rather than requiring the user to discover it independently.
 
 Users inspect resulting changes using their own tools. SpellAgent never stages, commits, pushes, publishes, or rolls back source changes.
 
@@ -106,10 +135,10 @@ Initial candidate: the host’s `haiku` alias.
 
 ### Common policy
 
-- Users may explicitly override the worker model.
+- Users may explicitly override the proofreading model.
 - Never switch to another provider or read provider credentials.
 - Never silently fall back to an expensive parent model.
-- If the requested worker model is unavailable or host policy overrides it, stop and explain the supported choice needed.
+- If the requested proofreading model is unavailable or host policy overrides it, stop before inference or writes. The response identifies the requested choice, the host-visible reason, and the configured default, then gives a copyable host-specific retry invocation with an available model. If availability cannot be enumerated, point to the exact host setting or model picker the user must use; do not guess a model name.
 - Host configuration and organizational policy remain authoritative.
 - Record the effective model when the host exposes it; do not invent verification.
 - Measure model quality before calling either candidate qualified.
@@ -121,19 +150,20 @@ The host handles inference billing, quotas, and authentication. SpellAgent does 
 
 The helper is an internal script invoked by the skill, not an installed public executable. Use a versioned JSON request/response protocol over stdin/stdout.
 
-Provide three internal operations:
+Provide four internal operations:
 
 | Operation | Behavior |
 | --- | --- |
 | Discover | Resolve preferences and enumerate eligible files with skip reasons |
 | Extract | Return a bounded page of prose segments for one file and its snapshot hash |
+| Validate file | Reconstruct current segments, validate complete responses, and return accepted proposals without writing |
 | Apply file | Reconstruct current segments, validate complete responses, and apply one file’s corrections |
 
 Requests include an explicit root and root-relative targets. Extraction returns deterministic segment IDs, a content hash, extraction/policy version, editable prose, and clearly separated read-only context.
 
 Model responses contain one record per requested segment, with zero or more proposals containing `original`, `replacement`, `category`, and `reason`. The model supplies no authoritative byte offsets.
 
-Each application request identifies the source snapshot and includes all segment responses for that file. The helper independently reconstructs mappings and validates completeness.
+Each validation or application request identifies the source snapshot and includes all segment responses for that file. The helper independently reconstructs mappings and validates completeness. Validation returns the accepted original/replacement pairs and diagnostics needed for correction-preview output, but does not create persistent state or grant a later apply request authority to reuse them.
 
 ### Transport and batching
 
@@ -161,6 +191,8 @@ Retain the existing coverage:
 - Java comments and supported Javadoc.
 - Python comments and syntactically identified docstrings.
 
+Plain `.txt` files are intentionally unsupported in v1 because they provide no reliable structure for distinguishing prose from examples, generated content, or syntax that must be protected. Scope preview reports this reason explicitly instead of silently ignoring requested text files.
+
 Retain Tree-sitter WASM for code and remark for Markdown.
 
 Use syntax trees to locate eligible prose and patch original bytes. Never reserialize a whole document or source file through an AST printer.
@@ -186,13 +218,21 @@ Supported preferences:
 - Hidden-path inclusion.
 - Case-sensitive glossary terms.
 
-Defaults work without creating a file. Invocation preferences override corresponding project preferences, except exclusions remain additive and mandatory protections always win. Invocation glossary terms extend the project glossary.
+Defaults work without creating a file. Invocation preferences override corresponding project preferences, except exclusions remain additive and mandatory protections always win. Invocation glossary terms extend the project glossary. Users provide invocation terms in ordinary language, for example, “treat `SomeSDKName` as a glossary term”; host-specific skill documentation includes a copyable example.
+
+Before review, display the effective dialect and the merged, case-sensitive glossary in the preflight or scope summary. The final response confirms the glossary terms honored for that run and reports invalid or rejected terms explicitly. Never silently drop an invocation term.
 
 Validate unknown keys strictly. Existing configurations containing provider, pricing, scheduler, or removed limit fields receive an actionable migration error before processing. Do not silently reinterpret or overwrite them.
 
 No provider credentials, models, request limits, storage controls, or concurrency settings belong in this project file. Worker model choice belongs to the host integration.
 
-Retain existing inline suppression directives and their syntax-aware interpretation.
+Retain existing inline suppression directives and their syntax-aware interpretation. Document all three forms in the skill itself:
+
+- `spellagent-disable-next-line` suppresses the next physical line.
+- `spellagent-disable` begins a suppressed region.
+- `spellagent-enable` ends a suppressed region.
+
+Markdown uses HTML comments such as `<!-- spellagent-disable-next-line -->`; source files use the language’s ordinary comment syntax with the exact directive token. Scope preview counts suppressed prose separately from other protected content. Correction reports link or point to this short suppression help when corrections are rejected or the user may need a targeted opt-out.
 
 ## 8. Validation and incremental editing
 
@@ -225,13 +265,15 @@ Apply edits with UTF-8 byte slices. Preserve mode, BOM, line endings, and untouc
 
 Use a project write lock, secure temporary files beside the target, final freshness checks, and per-file atomic replacement. Reject symlink traversal, hard-linked targets, root escapes, changed policy, and changed input.
 
-The lock coordinates SpellAgent writes, not arbitrary editors. Document the residual race between the final freshness check and replacement.
+The lock coordinates SpellAgent writes, not arbitrary editors. Document the residual race between the final freshness check and replacement in user-facing safety documentation, not only in engineering notes. Any detected freshness, lock, or replacement conflict is a prominent “needs attention” warning in the final response, names the unchanged or uncertain file, and is never relegated to the application log. The final check cannot prove that an uncooperative editor did not write in the last instant before replacement; state this residual limitation without claiming it can always be detected.
 
 Previously completed files remain changed if later files fail. Never imply repository-wide atomicity.
 
 ## 9. Data, permissions, and diagnostics
 
-The host receives extracted prose and bounded context for inference. The helper makes no network calls. Host conversation storage and retention are outside SpellAgent’s control.
+The host receives extracted prose and bounded context for inference in correction and correction-preview modes. The offline scope preview sends no prose to a proofreading model. The helper makes no network calls. Host conversation storage and retention are outside SpellAgent’s control.
+
+Put this distinction in the user-facing skill description and repeat a concise privacy notice before model-backed review: extracted prose is processed by the selected host model and may be retained under the host or organization’s policies. Do not imply that local helper execution makes model-backed review entirely local or confidential. The notice does not need a separate confirmation prompt unless the host’s permission model requires one.
 
 Treat repository prose as untrusted data. Instructions inside extracted text must never alter the workflow or authorize unrelated actions.
 
@@ -279,7 +321,7 @@ Exit: existing language coverage and protections pass adapted offline fixtures; 
 
 ### Phase C — Safe automatic editing
 
-Implement proposal validation, structural checks, freshness protection, locking, atomic writes, logs, cancellation, and per-file completion.
+Implement proposal validation, single-file correction preview, structural checks, freshness protection, locking, atomic writes, logs, cancellation, and per-file completion.
 
 Exit: both host workflows can correct synthetic local files through the helper, with failure behavior matching this design.
 
@@ -287,7 +329,7 @@ Exit: both host workflows can correct synthetic local files through the helper, 
 
 Evaluate proofreading quality, installed-package portability, host invocation, effective model behavior, interruption handling, and documented limitations.
 
-Exit: required host/platform checks pass, quality targets are measured, and versioned artifacts and marketplace catalogs are ready for review.
+Exit: required host/platform checks pass, the quality targets in section 12 are measured, and versioned artifacts and marketplace catalogs are ready for review.
 
 Publication remains a separate authorized action.
 
@@ -302,6 +344,7 @@ Required coverage:
 - Parser and byte-mapping fixtures for Unicode, BOM, CRLF, repeated text, and protected constructs.
 - Malformed, missing, duplicate, unknown, and overlapping proposal records.
 - Multiple extraction pages and complete-file coverage.
+- Correction preview validates one explicit file, reports proposals, and performs no source or persistent-state writes.
 - Stale files, changing exclusions, symlinks, hard links, root escapes, lock contention, and interrupted writes.
 - Byte-identical content outside approved ranges.
 - No source-bearing persistent state or helper network/subprocess activity.
@@ -460,3 +503,36 @@ The user explicitly approved ending implementation and running verification.
 Phase B's offline exit gate is satisfied for the tested arm64 platforms. This
 does not close Phase A's outstanding installed-host/model gates or qualify a
 proofreading release. The changes are ready for commit review with those limits.
+
+### Preview UX reconciliation and verification — 2026-09-21
+
+Following the plan's UX revision, the Phase B helper candidate now returns the
+effective scope and merged glossary, per-format eligible coverage, per-reason
+skip/failure totals, known-file coverage ratio inputs, a narrow-coverage signal,
+separate suppression counts, and a reason when no text is eligible. Plain `.txt`
+files receive a dedicated unsupported reason. Invalid invocation glossary terms
+return source-free indexes so the host can name rejected terms without the helper
+echoing them. Shared and host skill sources now
+specify outcome-first reports, ordinary-language invocation/glossary examples,
+suppression discovery, offline/model-retention boundaries, and actionable
+unavailable-model responses. Phase A's synthetic workflow received the applicable
+reporting, privacy, and model-error instruction changes.
+
+The single-file correction preview and `validate file` operation remain Phase C
+because they require model proposals and proposal validation. No Phase C operation
+was added to the read-only helper.
+
+After implementation ended, `npm run check` and `npm run test:pack` passed on
+macOS Darwin arm64 with Node v24.14.1/npm 11.12.1. The final check ran 27 tests
+across six files and all eight parser probes. Its first run found one stale test
+expectation for a correctly typed excluded directory; the assertion was corrected
+and the full check then passed. The isolated read-only Codex package exercised the
+new summary and source-free invalid-glossary response.
+
+`npm run test:linux` first failed because the sandbox could not access Docker's
+socket. The authorized retry passed on Linux aarch64/arm64 with Node v24.14.1/npm
+11.11.0, running the same 27 tests, eight parser probes, and isolated Codex package
+check. Dependency preparation used network access; checks ran with container
+networking disabled. Phase A's installed-host/model gates and the user-directed
+Claude deferral remain unchanged. No installation, publication, or marketplace
+change was performed.

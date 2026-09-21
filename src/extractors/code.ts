@@ -130,9 +130,9 @@ export async function extractCode(input: ExtractInput): Promise<ExtractionResult
   const parser = await createParser(language);
   try {
     const tree = parser.parse(input.source);
-    if (!tree) return { segments: [], diagnostics: [{ code: 'parse_failed' }], notices: [] };
+    if (!tree) return { segments: [], suppressedSegments: 0, diagnostics: [{ code: 'parse_failed' }], notices: [] };
     try {
-      if (tree.rootNode.hasError) return { segments: [], diagnostics: [{ code: 'parse_error' }], notices: [] };
+      if (tree.rootNode.hasError) return { segments: [], suppressedSegments: 0, diagnostics: [{ code: 'parse_error' }], notices: [] };
       const nodes = tree.rootNode.descendantsOfType(COMMENT_TYPES);
       const comments: Comment[] = nodes.map(node => ({ node, normalized: normalizeWholeComment(input.source.slice(node.startIndex, node.endIndex)),
         line: displayPosition(input.source, node.startIndex).line }));
@@ -187,10 +187,14 @@ export async function extractCode(input: ExtractInput): Promise<ExtractionResult
       }
       const state = { fenced: false, javaCode: false };
       const segments = [];
+      let suppressedSegments = 0;
       const notices = new Set<string>();
       for (const candidate of candidates.sort((a, b) => a.start - b.start)) {
         const text = input.source.slice(candidate.start, candidate.end);
-        if (policy.disabled.has(candidate.line)) continue;
+        if (policy.disabled.has(candidate.line)) {
+          if (/\p{L}/u.test(text)) suppressedSegments += 1;
+          continue;
+        }
         if (isProtectedLine(text, language, candidate.doc, state)) {
           diagnostics.push({ code: 'protected_comment_construct', line: candidate.line });
           continue;
@@ -206,7 +210,7 @@ export async function extractCode(input: ExtractInput): Promise<ExtractionResult
           if (candidate.doc && language === 'rust') notices.add('rust_documentation_observable');
         }
       }
-      return { segments, diagnostics, notices: [...notices] };
+      return { segments, suppressedSegments, diagnostics, notices: [...notices] };
     } finally { tree.delete(); }
   } finally { parser.delete(); }
 }

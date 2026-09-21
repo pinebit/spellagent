@@ -1,9 +1,13 @@
 ---
 name: check
-description: Preview SpellAgent proofreading scope and prose coverage for local project files, or evaluate bundled synthetic fixtures. Automatic correction is not available yet.
+description: Offline-preview SpellAgent scope for local project files, or evaluate bundled synthetic fixtures with a host model. Project preview uses no proofreading model; model-backed fixture evaluation is subject to host retention. Automatic correction is not available yet.
 ---
 
 # SpellAgent for Codex — Read-only preview
+
+Example requests: “Preview the scope of `docs/`.” “Preview `docs/` using en-GB;
+treat `SpellAgent` and `Tree-sitter` as glossary terms.” A request to preview
+corrections for one file is a Phase C feature and is not available yet.
 
 For project previews, read [workflow.md](workflow.md). For explicitly requested
 bundled-fixture host/model evaluation, read [feasibility.md](feasibility.md). This installed skill's directory
@@ -22,7 +26,12 @@ plugin-installed custom agent. No nested delegation or parallel workers.
 
 Request model selection through the host's supported spawn interface; never
 silently inherit the parent model. If selection is unavailable, rejected, or
-known to be overridden, stop and report the blocker. If effective model metadata
+known to be overridden, stop before inference. Name the requested model, the
+host-visible reason, and the configured default. If the host exposes an available
+alternative, give this copyable retry form: “Evaluate SpellAgent's bundled fixtures
+using `<available-model>`.” Otherwise point to Codex's
+`agents.default_subagent_model` setting in `config.toml` and tell the user to name
+the allowed model in the retry; do not guess a model name. If effective model metadata
 is unavailable, report it as unverified, not as a successful model-selection gate.
 Wait for the worker, then relay its summary and incomplete gates. Do not use
 other tools to edit source or bypass the selected workflow scope. A helper invocation is the only authorized

@@ -1,8 +1,9 @@
 # Phase B implementation handoff
 
-Status: read-only offline engine verified on macOS/Linux arm64 on 2026-09-21.
-See plan.md section 15 for actual qualification evidence and
-user-authorized deferrals. Automatic editing is Phase C and is not implemented.
+Status: the read-only offline engine and its expanded preview contract were
+verified on macOS/Linux arm64 on 2026-09-21. See plan.md section 15 for actual
+evidence and user-authorized deferrals. Automatic editing, including the
+single-file correction preview, is Phase C and is not implemented.
 
 ## Product interface
 
@@ -11,10 +12,15 @@ UTF-8 JSON document on stdin and no arguments. Node.js 24+ is required. Requests
 are limited to 64 KiB. A successful response has `ok: true`; source-free errors
 have `ok: false`, a diagnostic `code`, and exit status 2. Legacy preference errors
 also return actionable migration guidance. No helper state or logs are written.
+Invalid invocation glossary terms return `invalid_glossary` with source-free
+indexes so the host can identify rejected terms from the user's original request
+without the helper echoing them.
 
 Version 2 exposes `discover` and `extract`. Version 1 retains bundled-fixture
 operations for the deferred host feasibility qualification; it cannot accept
 project paths, preferences, arbitrary source text, or write requests.
+The current extraction and policy revisions are `phase-b-2`; their hashes prevent
+continuing a preview created under the earlier Phase B contract.
 
 ### Discover
 
@@ -33,11 +39,20 @@ includeHidden, and glossary. The helper loads only the root's optional config.
 A discover response contains:
 
 - `items`: eligible files with snapshot/coverage metadata, skipped paths with
-  reasons, and failed paths. Skipped directories account for a subtree, not a
-  fabricated descendant-file count. No source is returned by discover.
-- `summary`: eligible-file, skipped/failed-path, eligible/skipped-segment,
-  diagnostic, and notice totals; zero reviewed segments and zero files changed.
+  reasons, and failed paths. Each record identifies its known path type. Skipped
+  directories account for a subtree, not a fabricated descendant-file count. No
+  source is returned by discover. Requested `.txt` files use the explicit
+  `plain_text_unsupported` reason rather than a generic unsupported-format result.
+- `summary`: eligible-file, skipped/failed-path, eligible/skipped/suppressed-segment,
+  diagnostic, and notice totals; per-format eligible coverage; skipped/failed
+  reason totals; known file count; a narrow-coverage signal; zero reviewed
+  segments; and zero files changed.
 - `status`: preview, no_eligible_text, or incomplete (file failures).
+- `noEligibleTextReason` when no segments are eligible, distinguishing unsupported
+  types, exclusions, no extractable prose, suppression, encoding/size, unavailable
+  prose, extraction failure, and a genuinely empty scope.
+- `effectiveScope`: physical root, targets, dialect, hidden-path policy, and the
+  exact merged case-sensitive glossary honored for the preview.
 - `totalRecords`, `cursor`, `nextCursor`, `scopeHash`, and `policyHash`.
 
 Continue with the same root, targets, and invocation preferences, adding both
@@ -53,7 +68,7 @@ repository snapshot. It never certifies proofreading or editing safety.
 
 Use discovery's policyHash and the file's snapshot.sha256 as snapshotHash when
 available, including on the first page. Subsequent pages require both hashes.
-Responses contain snapshot metadata, effective dialect, coverage, totalSegments,
+Responses contain snapshot metadata, effective dialect and glossary, coverage, totalSegments,
 totalRecords, policy/extraction versions, and paged `items`:
 
 | Kind | Payload |
@@ -64,7 +79,8 @@ totalRecords, policy/extraction versions, and paged `items`:
 | notice | source-free limitation code |
 
 All record kinds count toward totalRecords. Segments plus skips count toward
-totalSegments. Diagnostics and notices can occupy pages without prose.
+totalSegments. Suppressed prose is counted in coverage but is not emitted as a
+source-bearing record. Diagnostics and notices can occupy pages without prose.
 Source maps and protected byte ranges remain internal for future application.
 Segment IDs are deterministic for a source snapshot, policy, and extraction
 version; consumers must not treat IDs alone as freshness evidence.
@@ -79,6 +95,14 @@ mappings, including Unicode and BOM offsets. No text is silently truncated.
 Consumers must count records/IDs across pages and stop on incomplete JSON,
 repeated IDs, missing records, or changed hashes. A preview never means
 "no corrections found"; empty scope means "no eligible text".
+
+The packaged workflow leads with eligible files/segments and “no files changed,”
+then shows per-format and per-file coverage, reason-grouped skips/failures,
+effective settings, and incomplete content. It warns when no files are eligible or
+when fewer than half of at least ten known file records are eligible. Collapsed
+directory exclusions remain paths/subtrees and are not fabricated as file counts.
+It documents all three inline suppression directives and never invents a duration
+estimate. Offline scope preview sends no project prose to a proofreading model.
 
 ## Preferences and migration
 
@@ -150,3 +174,26 @@ project is implemented and a subscription is available. Packaging continues to
 build both artifacts. Package verification defaults to Codex only, including in
 Docker. When the user lifts that deferral, run with
 `SPELLAGENT_TEST_HOSTS=codex,claude`; this does not itself authorize live inference.
+
+## UX reconciliation verification — 2026-09-21
+
+After the maintained plan's preview UX was expanded, Phase B added effective-scope
+echoing, per-format and per-reason summaries, explicit empty-scope explanations,
+narrow-coverage signaling, separate suppression counts, and a dedicated `.txt`
+exclusion reason. The shared/host skill sources now include ordinary-language
+examples, glossary confirmation, suppression help, outcome-first reporting, and
+the offline/model-retention distinction. Tests and isolated package assertions were
+updated for the new contract.
+
+After implementation ended, `npm run check` and `npm run test:pack` passed on
+macOS Darwin arm64 with Node v24.14.1/npm 11.12.1. The final check ran 27 tests
+across six files and all eight parser probes. The first check exposed one stale
+test expectation for a correctly identified excluded directory; after correcting
+that assertion, the full check passed. The isolated Codex package check exercised
+the new summary and invalid-glossary contracts from a read-only artifact.
+
+`npm run test:linux` initially could not access the Docker socket in the sandbox.
+The authorized retry passed on Linux aarch64/arm64 with Node v24.14.1/npm 11.11.0:
+the same 27 tests, eight parser probes, and isolated Codex package check. Dependency
+preparation used network access; the actual checks ran with container networking
+disabled. Phase A installed-host/model gates and the Claude deferral are unchanged.
