@@ -7,7 +7,8 @@ description: Correct local documentation, comments, and docstrings with one proo
 
 Examples: “Check `docs/`.” “Preview the scope of `docs/`.” “Preview corrections
 for `README.md` without changing it.” “Check `docs/` using en-GB; treat
-`SpellAgent` and `Tree-sitter` as glossary terms.”
+`SpellAgent` as a glossary term.” “Check `docs/`; treat `SpellAgent`,
+`Tree-sitter`, and `Codex` as glossary terms.”
 
 For project work, read [workflow.md](workflow.md). For explicitly requested
 bundled-fixture host/model evaluation, read [feasibility.md](feasibility.md). This installed skill's directory

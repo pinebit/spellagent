@@ -9,6 +9,10 @@ through the helper's `apply-file` operation. Do not use Git, network access,
 subprocesses other than the installed Node helper, nested delegation, parallel
 file workers, saved proposal files, retries, or repair requests.
 
+"Helper," "worker," and "engine" are internal implementation terms for this
+instruction set. Never use them in text shown to the user; speak only in terms of
+files, segments, and corrections.
+
 Choose the mode from the request:
 
 - Correct: discover files, review every eligible segment, then apply each complete
@@ -18,10 +22,22 @@ Choose the mode from the request:
 - Correction preview: the user must explicitly name exactly one file. Review and
   validate proposals, show them, but do not apply them.
 
+If the request's mode or target is ambiguous, never guess. Restate the available
+interpretations as copyable examples that name the user's own target — for
+example, offering both “preview the scope of `docs/`” and “preview corrections for
+`docs/README.md`” — and take no action until the user picks one. If a
+correction-preview request names a directory or more than one file, explain the
+single-file constraint and suggest the nearest valid single-file alternative
+instead of failing with an unexplained error.
+
 Before model-backed review, state that extracted prose and bounded context are
 processed by the selected host model and may be retained under host or organization
-policy. The local helper itself makes no network requests. Continue without a
-separate confirmation unless host permissions require one.
+policy. Show this full notice on the conversation's first model-backed invocation.
+On a later model-backed invocation in the same conversation, show a one-line
+reminder instead, unless the effective dialect, glossary, or target root changed
+since the full notice was last shown — in that case show the full notice again.
+Never omit the notice entirely. The local helper itself makes no network requests.
+Continue without a separate confirmation unless host permissions require one.
 
 Use the working directory as root unless the user explicitly names another root.
 Use its absolute physical path and root-relative targets; never infer a root through
@@ -106,6 +122,12 @@ Invalid/incomplete responses leave the file unchanged and unresolved. A changed
 file is complete before moving to the next file. An unchanged fully reviewed file
 is also complete.
 
+For a Correct run spanning more than a few files, show incremental progress as
+each file completes — for example, “Reviewed 3 of 18 files, 2 corrected so
+far” — rather than staying silent until the final summary. If the host cannot
+stream intermediate output during this invocation, show progress at the coarsest
+interval it supports, but never suppress it entirely for a large scope.
+
 Never reuse a correction-preview result for application. A later correction starts
 with fresh discovery/extraction and model review. Do not inspect or expose helper
 logs as proofreading results; they contain only source-free paths, hashes, counts,
@@ -122,7 +144,10 @@ an uncooperative editor. Never promise all such races are detectable.
 Lead with the user outcome:
 
 - Correct: corrections applied and changed-file count, while stating partial
-  completion when any file remains unresolved.
+  completion when any file remains unresolved. When any file needs attention,
+  state that count in this same Result line — for example, “12 corrections
+  applied across 4 files; 2 files need attention” — so it is never discovered
+  only after reading the full per-file breakdown.
 - Correction preview: validated correction count for the named file and “no files
   changed,” followed by every original/replacement pair, category, and reason.
 - Scope preview: eligible segments/files and skipped paths, plus “no files changed”
@@ -134,6 +159,16 @@ and exact merged glossary; and relevant notices. Never call empty coverage “al
 clear” or “no corrections found.” Explain `noEligibleTextReason`. Warn when
 `narrowCoverage` is true and name applicable remedies only. Suggest includeHidden
 only for hidden paths and note that mandatory exclusions still win.
+
+If the run is cancelled, use this same Result/What changed/Needs attention/
+Coverage structure rather than a bare interruption message: state exactly which
+files finished, which file was in progress when cancellation happened, and which
+were never reached.
+
+Whenever `suppressedSegments` is greater than zero — in scope preview or in a
+Correct/correction-preview coverage summary — report the count and point to the
+suppression syntax below, so users can discover it before running correction, not
+only after a rejected suggestion.
 
 Markdown heading corrections can change implicit anchors. Python docstrings affect
 `__doc__`. Rust documentation can affect tooling and macros. Completed files remain

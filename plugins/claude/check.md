@@ -12,8 +12,9 @@ allowed-tools: Read, Bash
 
 Examples: `/spellagent:check check docs/`, `/spellagent:check preview the scope of
 docs/`, and `/spellagent:check preview corrections for README.md without changing
-it`. Preferences may be ordinary language, such as “use en-GB; treat SpellAgent
-and Tree-sitter as glossary terms.”
+it`. Preferences may be ordinary language, such as “use en-GB; treat SpellAgent as
+a glossary term” for one term, or “treat SpellAgent, Tree-sitter, and Codex as
+glossary terms” for several.
 
 For project work, read [workflow.md](workflow.md). For explicitly requested
 bundled-fixture host/model evaluation, read [feasibility.md](feasibility.md). Resolve the helper relative to
