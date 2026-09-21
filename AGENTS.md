@@ -3,9 +3,9 @@
 Do not commit, push, publish, install plugins, or change external marketplaces
 without the user's explicit approval.
 
-Use README.md for development commands and docs/new-plan.md for the maintained
-design, phase gates, and implementation evidence. docs/old-plan.md is historical
-evidence only. Do not silently expand phase scope.
+Use README.md for development commands and docs/plan.md for the maintained
+design, phase gates, and implementation evidence. Do not silently expand phase
+scope.
 
 Do not run checks or tests during an implementation session. Wait until the user
 explicitly says the session or requested work is finished, then run applicable

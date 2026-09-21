@@ -1,12 +1,12 @@
 # Phase A implementation and verification handoff
 
-Historical Phase A handoff; see new-plan.md section 15 for the subsequent
+Historical Phase A handoff; see plan.md section 15 for the subsequent
 qualification attempt, Phase B changes, and user-directed Claude deferral.
 
 Status at the original handoff: implementation candidate, 2026-09-21. macOS/Linux arm64 offline checks,
 packaged extraction, Codex manifest/skill validation, and Claude manifest validation
 passed; live host gates remain unresolved.
-[new-plan.md](new-plan.md#14-adoption-and-phase-a-status) records the
+[plan.md](plan.md#14-adoption-and-phase-a-status) records the
 verification evidence and remains the governing design. No host installation or
 live model evaluation has been performed.
 
@@ -130,7 +130,7 @@ For each host/platform:
 4. Confirm summary reaches the invoking turn, zero source writes, no nested
    delegation, and correct disclosure of the deliberately skipped fixture.
 5. Record OS/architecture, Node/client versions, requested/effective model,
-   date, outcomes, and unresolved gates in new-plan.md. Do not record private
+   date, outcomes, and unresolved gates in plan.md. Do not record private
    source/transcripts or invent cost/usage measurements.
 
 The Claude wrapper cannot change a fork's model through prose arguments after

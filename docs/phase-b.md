@@ -1,7 +1,7 @@
 # Phase B implementation handoff
 
 Status: read-only offline engine verified on macOS/Linux arm64 on 2026-09-21.
-See new-plan.md section 15 for actual qualification evidence and
+See plan.md section 15 for actual qualification evidence and
 user-authorized deferrals. Automatic editing is Phase C and is not implemented.
 
 ## Product interface

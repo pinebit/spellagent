@@ -1,6 +1,6 @@
 # SpellAgent: Plugin Product and Implementation Plan
 
-Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B read-only implementation candidate; editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals. The previous design is archived in [old-plan.md](old-plan.md).
+Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B read-only implementation candidate; editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals.
 
 ## 1. Product direction
 
@@ -251,13 +251,12 @@ Remove the standalone CLI, interactive initialization, provider adapters, API pr
 
 Replace CLI tests with helper-protocol and plugin-package tests.
 
-Historical evidence records the existing Phase 1 passing on macOS arm64 and Linux arm64 with Node 24.14.1, 30 tests, eight parser probes, and offline packed-install checks. The old document’s opening status is stale. Historical passes do not qualify new plugin integration or editing.
+Historical evidence records the existing Phase 1 passing on macOS arm64 and Linux arm64 with Node 24.14.1, 30 tests, eight parser probes, and offline packed-install checks. Historical passes do not qualify new plugin integration or editing.
 
 Documentation adoption (completed 2026-09-21; see section 14):
 
 - This document is the maintained design.
 - README and AGENTS.md reference it.
-- The old plan is archived as old-plan.md with its evidence preserved.
 - Mandatory CLI initialization, provider selection, 32-worker scheduling, and whole-run application requirements are superseded.
 
 No commit, push, publication, or external marketplace change occurs without explicit authorization.
@@ -331,10 +330,9 @@ Host behavior must be rechecked against the client versions selected for release
 
 ## 14. Adoption and Phase A status
 
-2026-09-21: adopted this design, updated README.md and AGENTS.md, and archived
-the previous plan as old-plan.md without removing its historical evidence.
-The old mandatory CLI initialization, provider selection, 32-worker scheduler,
-and whole-run application design are superseded.
+2026-09-21: adopted this design and updated README.md and AGENTS.md. The old
+mandatory CLI initialization, provider selection, 32-worker scheduler, and
+whole-run application design are superseded.
 
 Phase A candidate scope is deliberately synthetic-only: a versioned stdin/stdout
 helper lists and extracts bundled fixtures for all eight parser formats, with
@@ -366,8 +364,7 @@ macOS (Darwin) arm64, Node v24.14.1, npm 11.12.1.
 - Claude Code 2.1.261: `claude plugin validate build/plugins/claude/spellagent`
   passed manifest validation only.
 - `git diff --check`, shell syntax validation for the Linux script, and Node
-  syntax validation for both new packaging scripts passed. The historical plan
-  matches HEAD's previous plan verbatim apart from its added archive banner.
+  syntax validation for both new packaging scripts passed.
 - `npm run test:linux`: passed after the user started Docker and sandbox socket
   access was authorized. Linux aarch64/arm64, Node v24.14.1, npm 11.11.0; 35 tests
   across seven files, eight parser probes, and both isolated plugin packages.

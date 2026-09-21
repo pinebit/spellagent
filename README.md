@@ -6,8 +6,7 @@ and an inexpensive, overridable model; a shared local helper extracts prose and
 will validate and apply minimal corrections. No SpellAgent API keys or standalone
 CLI are part of the new product.
 
-The maintained design is [docs/new-plan.md](docs/new-plan.md). The previous CLI
-design and its evidence are archived in [docs/old-plan.md](docs/old-plan.md).
+The maintained design is [docs/plan.md](docs/plan.md).
 
 ## Current status
 
@@ -84,7 +83,7 @@ other architectures, or installed host behavior.
   read-only protocol, and bundled synthetic fixtures.
 - `plugins/`: host manifests and shared workflow/host instruction sources.
 - `scripts/build-plugins.mjs`: self-contained artifact assembly.
-- `docs/new-plan.md`: maintained design and phase evidence.
+- `docs/plan.md`: maintained design and phase evidence.
 
 ## Optional preferences and preview
 
