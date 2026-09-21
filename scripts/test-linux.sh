@@ -17,6 +17,7 @@ COPYFILE_DISABLE=1 tar --no-xattrs --exclude='._*' -cf - package.json package-lo
   vitest.config.ts .npmrc LICENSE README.md AGENTS.md docs src tests scripts plugins |
   docker run --rm -i --mount "type=volume,source=$spellagent_volume,target=/workspace" \
     --env npm_config_cache=/workspace/npm-cache --env npm_config_update_notifier=false --env NO_COLOR=1 \
+    --env "SPELLAGENT_TEST_HOSTS=${SPELLAGENT_TEST_HOSTS:-codex}" \
     "$spellagent_image" sh -ec '
       mkdir -p "/workspace/project with spaces"
       cd "/workspace/project with spaces"
@@ -30,6 +31,7 @@ docker run --rm --network none \
   --mount "type=volume,source=$spellagent_volume,target=/workspace" \
   --workdir '/workspace/project with spaces' \
   --env npm_config_cache=/workspace/npm-cache --env npm_config_update_notifier=false --env NO_COLOR=1 \
+  --env "SPELLAGENT_TEST_HOSTS=${SPELLAGENT_TEST_HOSTS:-codex}" \
   "$spellagent_image" sh -ec '
     node --version
     npm --version

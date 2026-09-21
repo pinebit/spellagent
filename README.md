@@ -11,19 +11,22 @@ design and its evidence are archived in [docs/old-plan.md](docs/old-plan.md).
 
 ## Current status
 
-Repository migration and a Phase A implementation candidate are implemented.
-The candidate only extracts **bundled synthetic fixtures**, with bounded JSON
-pages. It does not scan projects, proofread user files, or apply edits.
-On macOS arm64 and Linux arm64, typecheck/build, 35 tests, eight parser probes,
-and both isolated plugin packages passed on 2026-09-21. Codex manifest/skill
-validation and Claude manifest validation also passed on macOS.
-Host installation and live model selection remain unverified.
-Nothing is published or installed automatically.
+Phase B's read-only offline engine passed offline verification on macOS/Linux arm64:
+optional preferences, local discovery, paged extraction, coverage accounting, and
+scope preview. It does not proofread or correct project files yet. The retired
+CLI and provider integration have been removed.
+
+Phase B verification passed on 2026-09-21, including isolated Codex package checks.
+Installed-host behavior remains unqualified. Codex host evidence and remaining
+gates are recorded in the maintained plan. At the user's request, all Claude
+qualification/tests are deferred until the entire project is implemented and a
+subscription is available. Both host packages remain in implementation scope.
+Nothing is published automatically.
 
 The planned user experience is one `check` skill: `/spellagent:check` in Claude
 Code and the corresponding installed skill in Codex. Normal invocation will
 apply validated corrections one file at a time; preview will remain read-only.
-Optional preferences will cover dialect, scope, hidden paths, and glossary.
+Optional preferences cover dialect, scope, hidden paths, and glossary.
 Existing local modifications are allowed. English en-US/en-GB and macOS/Linux
 are the intended initial scope; Windows remains untested.
 
@@ -47,8 +50,8 @@ npm run test:pack
 ```
 
 `check` typechecks, builds, runs offline tests, and runs synthetic parser probes.
-`test:pack` builds self-contained plugin directories and exercises their helper
-from an unrelated directory with spaces. Neither invokes an LLM nor installs a
+`test:pack` builds both self-contained plugin directories and exercises the
+Codex helper from an unrelated directory with spaces. Neither invokes an LLM nor installs a
 plugin into a host. Host checks are separate, explicitly opted-in evaluations.
 
 Build the development plugin artifacts explicitly with:
@@ -60,8 +63,8 @@ npm run build:plugins
 Output: `build/plugins/codex/spellagent/` and
 `build/plugins/claude/spellagent/`. Each contains a manifest, generated skill,
 compiled helper, runtime dependencies, grammars, and licenses. Recipients should
-not need npm or development dependencies. These are feasibility candidates,
-not qualified releases. See [Phase A handoff](docs/phase-a.md).
+not need npm or development dependencies. These are read-only candidates,
+not qualified releases. See [Phase B handoff](docs/phase-b.md).
 
 For isolated Linux verification, after verification is authorized:
 
@@ -77,25 +80,37 @@ other architectures, or installed host behavior.
 ## Repository layout
 
 - `src/extractors/`: existing AST extraction, protection, and byte mappings.
-- `src/plugin/`: read-only Phase A helper and synthetic fixtures.
+- `src/core/`, `src/discovery/`, `src/plugin/`: shared contracts, local discovery,
+  read-only protocol, and bundled synthetic fixtures.
 - `plugins/`: host manifests and shared workflow/host instruction sources.
 - `scripts/build-plugins.mjs`: self-contained artifact assembly.
 - `docs/new-plan.md`: maintained design and phase evidence.
 
-The old CLI, provider modules, configuration, and associated tests remain
-temporarily for regression continuity. They are not shipped in plugin artifacts
-and should not be extended. Phase B will migrate reusable discovery/contracts
-and remove obsolete API/CLI code and dependencies. Legacy npm executable
-metadata is transitional, not the distribution strategy. Do not use old `init`
-or `run` instructions to configure the plugins.
+## Optional preferences and preview
+
+No initialization is required. An optional root `.spellagentrc.json` uses
+`schemaVersion: 2` and may set dialect, include/exclude globs, includeHidden,
+and case-sensitive glossary terms. Invocation exclusions and glossary terms
+extend project values. Old provider/limit configurations fail with migration
+guidance and remain unchanged. See [protocol and preferences](docs/phase-b.md).
+
+The installed helper accepts version-2 discover/extract requests over stdin.
+Preview reports eligible, skipped, failed, and unchecked coverage with zero
+files changed. Symlinks, hard links, mandatory exclusions, unsupported encodings,
+and files over 1 MiB are excluded. Version-1 synthetic fixtures remain available
+for deferred host feasibility evaluations.
+
+Claude tests are currently deferred by user instruction. Package checks default
+to Codex only; `SPELLAGENT_TEST_HOSTS=codex,claude` restores both only after that
+deferral is lifted. Building both packages does not run Claude or consume usage.
 
 ## Safety and privacy
 
 The helper makes no network requests and launches no subprocesses. Future model
 calls happen within the host and follow its permissions, billing, and retention.
 Extracted prose is untrusted input. Source/proposals must not be saved as helper
-state. Phase A has no filesystem writes or application logs; later writes will
-use source-free logs and per-file validation, not saved backups or rollback.
+state. The current helper has no filesystem writes or application logs; later
+writes will use source-free logs and per-file validation, not saved backups or rollback.
 
 ## License
 

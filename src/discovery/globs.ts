@@ -1,13 +1,34 @@
 const REGEX_SPECIAL = /[\\^$.*+?()[\]{}|]/u;
 
 function expandBraces(pattern: string): string[] {
-  const open = pattern.indexOf('{');
-  if (open < 0) return [pattern];
-  const close = pattern.indexOf('}', open + 1);
-  if (close < 0) throw new Error(`Unclosed brace in glob: ${pattern}`);
-  const choices = pattern.slice(open + 1, close).split(',');
-  if (choices.some(choice => choice.length === 0)) throw new Error(`Empty brace choice in glob: ${pattern}`);
-  return choices.flatMap(choice => expandBraces(`${pattern.slice(0, open)}${choice}${pattern.slice(close + 1)}`));
+  if ((pattern.match(/\{/gu) ?? []).length > 4) throw new Error('Too many brace groups');
+  let expanded = [''];
+  let remaining = pattern;
+  for (;;) {
+    const open = remaining.indexOf('{');
+    if (open < 0) {
+      if (remaining.includes('}')) throw new Error('Unmatched closing brace');
+      return expanded.map(prefix => prefix + remaining);
+    }
+    const literal = remaining.slice(0, open);
+    const close = remaining.indexOf('}', open + 1);
+    if (literal.includes('}') || close < 0 || remaining.slice(open + 1, close).includes('{')) {
+      throw new Error('Unmatched or nested glob braces');
+    }
+    const choices = remaining.slice(open + 1, close).split(',');
+    if (choices.length > 32 || choices.some(choice => choice.length === 0)) throw new Error('Invalid brace choices');
+    // Bound the Cartesian product before allocating it.
+    if (expanded.length * choices.length > 256) throw new Error('Too many glob alternatives');
+    expanded = expanded.flatMap(prefix => choices.map(choice => prefix + literal + choice));
+    remaining = remaining.slice(close + 1);
+  }
+}
+
+function validatePattern(pattern: string) {
+  if (pattern.startsWith('!') || pattern.startsWith('/') || pattern.includes('\\') ||
+      /[:\u0000-\u001f\u007f]/u.test(pattern) || pattern.split('/').some(part => part === '..' || part === '.')) {
+    throw new Error('Unsupported root-relative glob');
+  }
 }
 
 function compileOne(pattern: string): RegExp {
@@ -30,10 +51,10 @@ function compileOne(pattern: string): RegExp {
 
 export function compileGlobs(patterns: readonly string[]): readonly { pattern: string; regexes: readonly RegExp[] }[] {
   return patterns.map(pattern => {
-    if (pattern.startsWith('!') || pattern.startsWith('/') || pattern.includes('\\') || pattern.includes('\0')) {
-      throw new Error(`Unsupported root-relative glob: ${pattern}`);
-    }
-    return { pattern, regexes: expandBraces(pattern).map(compileOne) };
+    validatePattern(pattern);
+    const expanded = expandBraces(pattern);
+    expanded.forEach(validatePattern);
+    return { pattern, regexes: expanded.map(compileOne) };
   });
 }
 

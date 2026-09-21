@@ -1,17 +1,21 @@
 {
   "name": "spellagent",
   "version": "0.0.0",
-  "description": "Read-only synthetic proofreading feasibility preview; no project edits.",
-  "author": { "name": "SpellAgent contributors" },
+  "description": "Read-only local proofreading scope and extraction preview; no project edits.",
+  "author": {
+    "name": "SpellAgent contributors"
+  },
   "license": "MIT",
   "skills": "./skills/",
   "interface": {
-    "displayName": "SpellAgent (Phase A)",
-    "shortDescription": "Preview extraction on bundled synthetic fixtures.",
-    "longDescription": "Development feasibility candidate. Does not scan or edit projects.",
+    "displayName": "SpellAgent (Preview)",
+    "shortDescription": "Preview proofreading scope and prose coverage.",
+    "longDescription": "Read-only implementation candidate. Automatic correction is not available yet.",
     "developerName": "SpellAgent contributors",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": ["Run the SpellAgent synthetic feasibility preview."]
+    "defaultPrompt": [
+      "Preview SpellAgent proofreading coverage for this project."
+    ]
   }
 }

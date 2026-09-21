@@ -8,35 +8,17 @@
   "engines": {
     "node": ">=24"
   },
-  "bin": {
-    "spellagent": "dist/cli/index.js"
-  },
-  "files": [
-    "dist",
-    "assets",
-    "README.md",
-    "LICENSE",
-    "docs/new-plan.md"
-  ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "build": "node scripts/clean-build.mjs && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "build:plugins": "npm run build && node scripts/build-plugins.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run build && npm test && npm run probe",
     "probe": "node dist/probes/offline.js",
     "test:pack": "node scripts/test-plugin-pack.mjs",
-    "smoke:live": "node dist/probes/live.js",
-    "prepack": "npm run build",
-    "pack:local": "npm run build && npm pack --ignore-scripts",
-    "test:linux": "bash scripts/test-linux.sh",
-    "prepare:pack-cache": "node scripts/test-pack.mjs --prepare-cache"
+    "test:linux": "bash scripts/test-linux.sh"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.58",
-    "@ai-sdk/openai": "4.0.71",
-    "ai": "7.0.107",
-    "commander": "15.0.0",
     "remark-gfm": "4.0.1",
     "remark-parse": "11.0.0",
     "unified": "11.0.5",

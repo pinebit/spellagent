@@ -187,6 +187,7 @@ export async function extractCode(input: ExtractInput): Promise<ExtractionResult
       }
       const state = { fenced: false, javaCode: false };
       const segments = [];
+      const notices = new Set<string>();
       for (const candidate of candidates.sort((a, b) => a.start - b.start)) {
         const text = input.source.slice(candidate.start, candidate.end);
         if (policy.disabled.has(candidate.line)) continue;
@@ -199,9 +200,13 @@ export async function extractCode(input: ExtractInput): Promise<ExtractionResult
           continue;
         }
         const segment = makeSegment(`${input.snapshot.id}_s${segments.length + 1}`, input.snapshot.id, input.source, candidate.start, candidate.end, input.glossary);
-        if (segment) segments.push(segment);
+        if (segment) {
+          segments.push(segment);
+          if (candidate.doc && language === 'python') notices.add('python_docstring_observable');
+          if (candidate.doc && language === 'rust') notices.add('rust_documentation_observable');
+        }
       }
-      return { segments, diagnostics, notices: [] };
+      return { segments, diagnostics, notices: [...notices] };
     } finally { tree.delete(); }
   } finally { parser.delete(); }
 }

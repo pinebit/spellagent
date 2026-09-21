@@ -1,6 +1,7 @@
 import { handleRequest, MAX_REQUEST_BYTES, ProtocolError, PROTOCOL_VERSION } from './protocol.js';
+import { MIGRATION_GUIDANCE } from '../discovery/config.js';
 
-// One JSON document in, one JSON document out. No argv interface or source files.
+// One JSON document in, one JSON document out. No public argv interface.
 try {
   if (Number(process.versions.node.split('.')[0]) < 24) throw new ProtocolError('node_24_required');
   if (process.argv.length !== 2) throw new ProtocolError('stdin_only');
@@ -20,6 +21,7 @@ try {
 } catch (error) {
   // Never echo input, parser exceptions, stack traces, or filesystem paths.
   const code = error instanceof ProtocolError ? error.code : 'extraction_failed';
-  process.stdout.write(JSON.stringify({ ok: false, protocolVersion: PROTOCOL_VERSION, code }) + '\n');
+  process.stdout.write(JSON.stringify({ ok: false, protocolVersion: PROTOCOL_VERSION, code,
+    ...(code === 'preferences_migration_required' ? { guidance: MIGRATION_GUIDANCE } : {}) }) + '\n');
   process.exitCode = 2;
 }

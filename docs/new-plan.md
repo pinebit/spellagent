@@ -1,6 +1,6 @@
 # SpellAgent: Plugin Product and Implementation Plan
 
-Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase A implementation candidate; no plugin functionality or editing safety is qualified by this document. See section 14 for evidence and unresolved gates. The previous design is archived in [old-plan.md](old-plan.md).
+Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B read-only implementation candidate; editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals. The previous design is archived in [old-plan.md](old-plan.md).
 
 ## 1. Product direction
 
@@ -396,3 +396,70 @@ not complete until its remaining gates have measured evidence. Existing legacy
 tests remain temporary regression coverage; they do not reinstate the retired
 CLI design. No commits, pushes, publication, or external marketplace changes
 were performed.
+
+## 15. Phase A continuation and Phase B implementation — 2026-09-21
+
+The user authorized completing Phase A as needed and proceeding with Phase B,
+including necessary local plugin installation and live host evaluation. During
+this session, the user explicitly deferred **all Claude qualification/tests**
+until after the entire project is implemented and a Claude subscription is
+available. This is a qualification deferral, not a Claude pass or removal of
+Claude implementation scope. Future phases must preserve that distinction.
+
+Phase B's offline implementation is now a candidate: strict optional schema-2
+preferences and migration guidance, root-relative discovery, secure bounded
+reads, paged discover/extract protocol, deterministic sentence/paragraph splitting
+with byte maps, explicit skip/failure coverage, diagnostics/notices pagination,
+and shared offline preview instructions. Source-free hashes invalidate stale
+scope, policy, and extraction continuations. The helper remains read-only.
+
+Removed the old public CLI, initialization flow, provider adapters/probes,
+provider/scheduler contracts, API SDK/commander dependencies, executable metadata,
+and CLI packaging/cache scripts. The lockfile was updated offline without
+lifecycle scripts. Build output is cleaned before compilation; packages explicitly
+include only the shared engine/helper and their runtime closure. Protocol 1
+remains synthetic-only for deferred feasibility evaluation.
+
+Added/adapted offline tests and Codex package verification, including read-only
+installed paths and an unrelated working directory with spaces. Both artifacts
+are still built; package tests default to Codex only under the Claude deferral.
+See [phase-b.md](phase-b.md) for the protocol and verification handoff.
+
+**Verification status:** Phase B offline checks passed after the user's explicit
+end-of-implementation authorization; evidence follows below. Phase C editing
+and Phase D release/quality qualification have not been started.
+
+### Continuation review — 2026-09-21
+
+Reviewed the pending Phase B source, protocol, packaging, and regression fixtures.
+Fixed directory-only exclusions so explicit descendant targets cannot bypass
+the policy used during directory traversal. Hardened brace globs to reject
+unmatched/nested braces and unsafe expanded alternatives, and enforce the
+256-alternative bound before allocating the Cartesian product. Added regression
+cases for these behaviors; they passed in the verification below.
+
+Phase A's installed-host/model gates remain unresolved; no new host evidence
+was produced in this review, and Claude qualification remains deferred.
+No commit, push, installation, or marketplace change was performed.
+
+### Authorized verification — 2026-09-21
+
+The user explicitly approved ending implementation and running verification.
+
+- macOS (Darwin) arm64, Node v24.14.1, npm 11.12.1: `npm run check`
+  passed typechecking, build, 26 tests across six files, and eight parser probes.
+  `npm run test:pack` built both artifacts and passed the isolated Codex package
+  checks from a read-only package directory and unrelated working directory with
+  spaces. Includes fixture/project protocols, migration, and source preservation.
+- Linux aarch64/arm64, Node v24.14.1, npm 11.11.0: `npm run test:linux`
+  passed the same 26 tests, eight parser probes, and Codex package checks.
+  The initial sandbox attempt could not access Docker's socket; the authorized
+  escalation succeeded. Dependency preparation used network access; checks ran
+  with container networking disabled. The script cleaned up its temporary volume.
+- No host/client or model was exercised by these offline checks. Claude packages
+  were built but not tested, preserving the user's deferral. No x64, Windows,
+  installed-host, or live-model pass is inferred.
+
+Phase B's offline exit gate is satisfied for the tested arm64 platforms. This
+does not close Phase A's outstanding installed-host/model gates or qualify a
+proofreading release. The changes are ready for commit review with those limits.

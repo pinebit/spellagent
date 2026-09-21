@@ -1,6 +1,6 @@
 ---
 name: check
-description: Preview SpellAgent prose extraction on bundled synthetic fixtures when asked to evaluate the SpellAgent plugin. Not for correcting project files yet.
+description: Preview SpellAgent proofreading scope and prose coverage for local project files, or evaluate bundled synthetic fixtures. Automatic correction is not available yet.
 context: fork
 agent: general-purpose
 model: haiku
@@ -8,9 +8,10 @@ background: false
 allowed-tools: Read
 ---
 
-# SpellAgent for Claude Code — Phase A
+# SpellAgent for Claude Code — Read-only preview
 
-Read [workflow.md](workflow.md) before execution. Resolve the helper relative to
+For project previews, read [workflow.md](workflow.md). For explicitly requested
+bundled-fixture host/model evaluation, read [feasibility.md](feasibility.md). Resolve the helper relative to
 this installed skill's directory at `../../runtime/dist/plugin/helper.js`.
 Use Read for instructions; use the host's permission-controlled execution tool
 only for the Node helper. Shell execution is not pre-approved by this skill.

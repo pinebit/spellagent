@@ -53,6 +53,7 @@ try {
     await mkdir(skill, { recursive: true });
     await cp(path.join(root, 'plugins', host, 'check.md'), path.join(skill, 'SKILL.md'));
     await writeFile(path.join(skill, 'workflow.md'), workflow);
+    await cp(path.join(root, 'plugins/shared/feasibility.md'), path.join(skill, 'feasibility.md'));
     await cp(path.join(root, 'LICENSE'), path.join(destination, 'LICENSE'));
     const runtime = path.join(destination, 'runtime');
     await mkdir(path.join(runtime, 'dist'), { recursive: true });
@@ -60,8 +61,8 @@ try {
       name: 'spellagent-plugin-runtime', version: pkg.version, private: true, type: 'module',
       engines: { node: '>=24' },
     }, null, 2) + '\n');
-    // Explicit allowlist excludes legacy CLI/provider/config/probe code.
-    for (const directory of ['extractors', 'plugin']) {
+    // Explicit allowlist excludes developer probes and any stale build output.
+    for (const directory of ['core', 'discovery', 'extractors', 'plugin']) {
       await cp(path.join(root, 'dist', directory), path.join(runtime, 'dist', directory), {
         recursive: true, filter: source => !source.endsWith('.d.ts'),
       });
@@ -96,7 +97,7 @@ try {
     await rm(output, { recursive: true });
   }
   await rename(staging, output);
-  console.log('Built synthetic-only Codex and Claude plugin candidates in build/plugins.');
+  console.log('Built read-only Codex and Claude plugin candidates in build/plugins.');
 } catch (error) {
   await rm(staging, { recursive: true, force: true });
   throw error;

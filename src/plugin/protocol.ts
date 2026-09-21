@@ -1,75 +1,88 @@
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { extractFile } from '../extractors/index.js';
-import type { FileSnapshot } from '../core/contracts.js';
-import { fixtures, type FixtureName } from './fixtures.js';
+import { countSchema, hashSchema, invocationPreferencesSchema, relativePathSchema } from '../core/contracts.js';
+import { HelperError } from '../core/errors.js';
+import { loadPreferences, resolveProjectRoot } from '../discovery/config.js';
+import { discover, extractLocalFile, sha256 } from '../discovery/discover.js';
+import { assertChain, inspectPath } from '../discovery/filesystem.js';
+import { handleFixtureRequest } from './fixture-protocol.js';
+import { pageRecords } from './paging.js';
 
-export const PROTOCOL_VERSION = 1;
-export const EXTRACTION_VERSION = 'phase-a-1';
-export const PAGE_SEGMENTS = 32;
-export const PAGE_CHARACTERS = 12_000;
-export const MAX_REQUEST_BYTES = 4096;
-
-const fixtureNames = Object.keys(fixtures) as [FixtureName, ...FixtureName[]];
+export { PAGE_SEGMENTS, PAGE_CHARACTERS } from './paging.js';
+export { HelperError as ProtocolError } from '../core/errors.js';
+export const PROTOCOL_VERSION = 2;
+export const EXTRACTION_VERSION = 'phase-b-1';
+export const POLICY_VERSION = 'phase-b-1';
+export const MAX_REQUEST_BYTES = 64 * 1024;
+const shared = {
+  protocolVersion: z.literal(2), root: z.string().min(1).max(4096),
+  preferences: invocationPreferencesSchema.default({}), cursor: countSchema.default(0),
+  policyHash: hashSchema.optional(),
+};
 const requestSchema = z.discriminatedUnion('operation', [
-  z.strictObject({ protocolVersion: z.literal(1), operation: z.literal('list-fixtures') }),
-  z.strictObject({ protocolVersion: z.literal(1), operation: z.literal('extract-fixture'),
-    fixture: z.enum(fixtureNames), cursor: z.number().int().nonnegative().safe().default(0),
-    snapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  z.strictObject({ ...shared, operation: z.literal('discover'),
+    targets: z.array(z.union([z.literal('.'), relativePathSchema])).max(256).default(['.']),
+    scopeHash: hashSchema.optional(),
+  }),
+  z.strictObject({ ...shared, operation: z.literal('extract'), path: relativePathSchema,
+    snapshotHash: hashSchema.optional(),
   }),
 ]);
 
-export class ProtocolError extends Error {
-  constructor(readonly code: string) { super(code); }
-}
-
 export async function handleRequest(input: unknown) {
+  // Preserve Phase A's synthetic-only protocol as a qualification probe. It
+  // cannot accept roots, user source, project preferences, or write requests.
+  if (typeof input === 'object' && input !== null && 'protocolVersion' in input && input.protocolVersion === 1) {
+    return handleFixtureRequest(input);
+  }
   const parsed = requestSchema.safeParse(input);
-  if (!parsed.success) throw new ProtocolError('invalid_request');
+  if (!parsed.success) throw new HelperError('invalid_request');
   const request = parsed.data;
-  if (request.operation === 'list-fixtures') {
-    return { protocolVersion: PROTOCOL_VERSION, operation: 'list-fixtures' as const, mode: 'synthetic-only',
-      fixtures: fixtureNames, capabilities: ['extract-fixture'], sourceWrites: false };
+  const root = await resolveProjectRoot(request.root);
+  const identity = await inspectPath(root);
+  const preferences = await loadPreferences(root, request.preferences);
+  const policyHash = sha256(JSON.stringify({ root, preferences, version: POLICY_VERSION, extraction: EXTRACTION_VERSION }));
+  if ((request.cursor > 0 && !request.policyHash) || (request.policyHash && request.policyHash !== policyHash)) {
+    throw new HelperError('policy_mismatch');
   }
-  const fixture = fixtures[request.fixture];
-  const hash = createHash('sha256').update(fixture.source).digest('hex');
-  if ((request.cursor > 0 && !request.snapshotHash) ||
-      (request.snapshotHash !== undefined && request.snapshotHash !== hash)) {
-    throw new ProtocolError('snapshot_mismatch');
-  }
-  const snapshot: FileSnapshot = {
-    id: `fixture_${request.fixture}`, path: `fixtures/${request.fixture}`, sha256: hash,
-    format: fixture.format, byteLength: Buffer.byteLength(fixture.source),
-    encoding: 'utf8', bom: false, eol: fixture.source.includes('\r\n') ? 'crlf' : 'lf',
-  };
-  const extraction = await extractFile(fixture.source, snapshot, []);
-  const records = extraction.segments.map(segment => ({
-    segmentId: segment.id, editable: segment.editableText, readOnlyContext: segment.context,
-  }));
-  if (request.cursor > records.length) throw new ProtocolError('invalid_cursor');
-  const segments: typeof records = [];
-  const skipped: { segmentId: string; code: string }[] = [];
-  let cursor = request.cursor;
-  let characters = 0;
-  while (cursor < records.length && segments.length + skipped.length < PAGE_SEGMENTS) {
-    const record = records[cursor]!;
-    const size = record.editable.length + record.readOnlyContext.reduce((sum, text) => sum + text.length, 0);
-    if (size > PAGE_CHARACTERS) {
-      skipped.push({ segmentId: record.segmentId, code: 'oversized_segment' });
-      cursor += 1;
-      continue;
+  const common = { protocolVersion: PROTOCOL_VERSION, mode: 'offline-preview' as const,
+    extractionVersion: EXTRACTION_VERSION, policyVersion: POLICY_VERSION, policyHash, sourceWrites: false };
+  if (request.operation === 'discover') {
+    const records = await discover({ root, paths: request.targets, preferences });
+    const scopeHash = sha256(JSON.stringify({ records, policyHash }));
+    if ((request.cursor > 0 && !request.scopeHash) || (request.scopeHash && request.scopeHash !== scopeHash)) {
+      throw new HelperError('scope_mismatch');
     }
-    if (characters + size > PAGE_CHARACTERS) break;
-    segments.push(record);
-    characters += size;
-    cursor += 1;
+    await assertChain(identity.chain);
+    const summary = {
+      filesEligible: records.filter(item => item.state === 'eligible').length,
+      pathsSkipped: records.filter(item => item.state === 'skipped').length,
+      pathsFailed: records.filter(item => item.state === 'failed').length,
+      eligibleSegments: records.reduce((sum, item) => sum + (item.coverage?.eligibleSegments ?? 0), 0),
+      skippedSegments: records.reduce((sum, item) => sum + (item.coverage?.skippedSegments ?? 0), 0),
+      diagnosticCount: records.reduce((sum, item) => sum + (item.coverage?.diagnostics ?? 0), 0),
+      noticeCount: records.reduce((sum, item) => sum + (item.coverage?.notices ?? 0), 0),
+      reviewedSegments: 0, filesChanged: 0,
+    };
+    return { ...common, operation: 'discover' as const, scopeHash, totalRecords: records.length, summary,
+      status: summary.pathsFailed ? 'incomplete' : summary.eligibleSegments ? 'preview' : 'no_eligible_text',
+      ...pageRecords(records, request.cursor) };
   }
-  return {
-    protocolVersion: PROTOCOL_VERSION, operation: 'extract-fixture' as const,
-    mode: 'synthetic-only', extractionVersion: EXTRACTION_VERSION,
-    fixture: request.fixture, snapshotHash: hash, totalSegments: records.length,
-    cursor: request.cursor, nextCursor: cursor < records.length ? cursor : null,
-    segments, skipped, characters, diagnostics: extraction.diagnostics, notices: extraction.notices,
-    sourceWrites: false,
+  const file = await extractLocalFile(root, request.path, preferences);
+  if ((request.cursor > 0 && !request.snapshotHash) || (request.snapshotHash && request.snapshotHash !== file.snapshot.sha256)) {
+    throw new HelperError('snapshot_mismatch');
+  }
+  const records = [
+    ...file.prepared.map(item => item.kind === 'segment'
+      ? { kind: 'segment' as const, segmentId: item.segment.id, editable: item.segment.editableText, readOnlyContext: item.segment.context }
+      : item),
+    ...file.diagnostics.map(item => ({ kind: 'diagnostic' as const, ...item })),
+    ...file.notices.map(code => ({ kind: 'notice' as const, code })),
+  ];
+  await assertChain(identity.chain);
+  return { ...common, operation: 'extract' as const, path: request.path,
+    snapshot: file.snapshot, snapshotHash: file.snapshot.sha256, coverage: file.coverage,
+    dialect: preferences.dialect, totalRecords: records.length, totalSegments: file.prepared.length,
+    ...pageRecords(records, request.cursor, record => record.kind === 'segment'
+      ? record.editable.length + record.readOnlyContext.reduce((sum, context) => sum + context.length, 0) : 0),
   };
 }

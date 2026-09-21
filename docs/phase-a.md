@@ -1,6 +1,9 @@
 # Phase A implementation and verification handoff
 
-Status: implementation candidate, 2026-09-21. macOS/Linux arm64 offline checks,
+Historical Phase A handoff; see new-plan.md section 15 for the subsequent
+qualification attempt, Phase B changes, and user-directed Claude deferral.
+
+Status at the original handoff: implementation candidate, 2026-09-21. macOS/Linux arm64 offline checks,
 packaged extraction, Codex manifest/skill validation, and Claude manifest validation
 passed; live host gates remain unresolved.
 [new-plan.md](new-plan.md#14-adoption-and-phase-a-status) records the

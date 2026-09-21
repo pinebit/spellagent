@@ -1,6 +1,6 @@
 // Offline development check; does not install plugins into either host.
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rm, mkdir } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, mkdir, realpath, writeFile, chmod } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,13 +11,25 @@ const version = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8
 const env = { PATH: process.env.PATH, NO_COLOR: '1', npm_config_update_notifier: 'false' };
 const build = spawnSync('npm', ['run', 'build:plugins'], { cwd: root, env, stdio: 'inherit' });
 assert.equal(build.status, 0, 'Plugin build failed');
-const temporary = await mkdtemp(path.join(os.tmpdir(), 'spellagent plugin checks '));
+const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'spellagent plugin checks ')));
+// Claude qualification/tests are explicitly deferred by the project owner.
+const hosts = (process.env.SPELLAGENT_TEST_HOSTS ?? 'codex').split(',');
+assert.ok(hosts.length > 0 && hosts.every(host => ['codex', 'claude'].includes(host)), 'Invalid test hosts');
+async function permissions(directory, readonly) {
+  await chmod(directory, readonly ? 0o555 : 0o755);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) await permissions(file, readonly);
+    else await chmod(file, readonly ? 0o444 : 0o644);
+  }
+}
 try {
   const cwd = path.join(temporary, 'unrelated working directory');
   await mkdir(cwd);
-  for (const host of ['codex', 'claude']) {
+  for (const host of hosts) {
     const plugin = path.join(temporary, host, 'spellagent');
     await cp(path.join(root, 'build/plugins', host, 'spellagent'), plugin, { recursive: true });
+    await permissions(plugin, true);
     const runtime = path.join(plugin, 'runtime');
     const helper = path.join(runtime, 'dist/plugin/helper.js');
     const manifests = host === 'codex'
@@ -65,6 +77,26 @@ try {
       if (fixture === 'pages') assert.ok(pages > 1);
       if (fixture === 'oversized') assert.ok(skipped > 0);
     }
+    const project = path.join(temporary, `${host} synthetic project`);
+    await mkdir(project);
+    const source = '\uFEFF# Heading\r\n\r\nA sentense.';
+    await writeFile(path.join(project, 'notes.md'), source);
+    const discovery = run({ protocolVersion: 2, operation: 'discover', root: project });
+    assert.equal(discovery.summary.filesEligible, 1);
+    assert.equal(discovery.summary.reviewedSegments, 0);
+    const extraction = run({ protocolVersion: 2, operation: 'extract', root: project, path: 'notes.md',
+      policyHash: discovery.policyHash, snapshotHash: discovery.items[0].snapshot.sha256 });
+    assert.equal(extraction.snapshot.bom, true);
+    assert.ok(extraction.items.some(item => item.kind === 'segment' && item.editable.includes('sentense')));
+    assert.equal(await readFile(path.join(project, 'notes.md'), 'utf8'), source);
+    assert.deepEqual(await readdir(project), ['notes.md']);
+    await writeFile(path.join(project, '.spellagentrc.json'), '{"schemaVersion":1,"provider":{}}');
+    const migration = spawnSync(process.execPath, [helper], { cwd, env,
+      input: JSON.stringify({ protocolVersion: 2, operation: 'discover', root: project }), encoding: 'utf8' });
+    assert.equal(migration.status, 2);
+    const migrationResponse = JSON.parse(migration.stdout);
+    assert.equal(migrationResponse.code, 'preferences_migration_required');
+    assert.ok(migrationResponse.guidance.includes('schemaVersion: 2'));
     const failure = spawnSync(process.execPath, [helper], { cwd, env,
       input: '{"source":"private sentinel"}', encoding: 'utf8', timeout: 30_000 });
     assert.equal(failure.status, 2);
@@ -73,14 +105,14 @@ try {
     for (const [input, code] of [
       ['not JSON', 'invalid_json'],
       [Buffer.from([0xff]), 'invalid_json'],
-      ['x'.repeat(4097), 'request_too_large'],
+      ['x'.repeat(64 * 1024 + 1), 'request_too_large'],
     ]) {
       const invalid = spawnSync(process.execPath, [helper], { cwd, env, input,
         encoding: 'utf8', timeout: 30_000 });
       assert.equal(invalid.status, 2);
       assert.equal(JSON.parse(invalid.stdout).code, code);
     }
-    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['extractors', 'plugin']);
+    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['core', 'discovery', 'extractors', 'plugin']);
     const dependencies = JSON.parse(await readFile(path.join(runtime, 'dependencies.json'), 'utf8'));
     assert.ok(dependencies.some(entry => entry.name === 'web-tree-sitter'));
     assert.ok(!dependencies.some(entry => /ai-sdk|^ai$|commander/.test(entry.name)));
@@ -90,8 +122,9 @@ try {
     assert.ok(skill.startsWith('---\n'));
     assert.ok((await readFile(path.join(plugin, 'skills/check/workflow.md'), 'utf8')).length > 0);
     assert.deepEqual(await readdir(cwd), [], 'Helper wrote into working directory');
-    console.log(`${host}: isolated packaged synthetic extraction passed (not a host integration pass).`);
+    console.log(`${host}: isolated packaged fixture/project preview passed (not a host integration pass).`);
   }
 } finally {
+  await permissions(temporary, false);
   await rm(temporary, { recursive: true, force: true });
 }

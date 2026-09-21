@@ -1,44 +1,56 @@
-import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { CONFIG_PATH, configSchema, type Config } from '../core/contracts.js';
+import { CONFIG_PATH, preferencesSchema, invocationPreferencesSchema,
+  type InvocationPreferences, type Preferences } from '../core/contracts.js';
+import { HelperError } from '../core/errors.js';
+import { compileGlobs } from './globs.js';
+import { inspectPath, readLocalFile, strictUtf8 } from './filesystem.js';
 
-export class UserError extends Error {}
-
-export async function resolveProjectRoot(rootOption: string | undefined, cwd = process.cwd()): Promise<string> {
-  const candidate = path.resolve(cwd, rootOption ?? '.');
-  let root: string;
-  try { root = await realpath(candidate); }
-  catch { throw new UserError(`Project root does not exist: ${candidate}`); }
-  if (!(await stat(root)).isDirectory()) throw new UserError(`Project root is not a directory: ${candidate}`);
+export async function resolveProjectRoot(root: string): Promise<string> {
+  if (!path.isAbsolute(root) || /[\u0000-\u001f\u007f]/u.test(root)) throw new HelperError('invalid_root');
+  const result = await inspectPath(root);
+  if (!result.info.isDirectory()) throw new HelperError('invalid_root');
   return root;
 }
 
-export async function loadConfig(root: string): Promise<Config> {
-  const configPath = path.join(root, CONFIG_PATH);
-  let raw: string;
-  try {
-    const info = await lstat(configPath);
-    if (info.isSymbolicLink() || !info.isFile()) throw new UserError(`${CONFIG_PATH} must be a regular file, not a symlink.`);
-    raw = await readFile(configPath, 'utf8');
+const legacyKeys = ['provider', 'pricing', 'limits', 'language', 'storage', 'concurrency', 'model',
+  'maxAgents', 'maxRequests', 'maxInputTokensPerRequest', 'maxOutputTokensPerRequest',
+  'maxFileBytes', 'timeoutMs', 'maxRetries', 'maxEstimatedUsd', 'scheduler', 'retentionDays'];
+export const MIGRATION_GUIDANCE = 'Replace the legacy configuration with schemaVersion: 2 and only dialect, include, exclude, includeHidden, and glossary. Model selection belongs to the host. The existing file was not changed.';
+
+export function parsePreferences(input: unknown): Preferences {
+  if (typeof input === 'object' && input !== null && !Array.isArray(input)) {
+    const object = input as Record<string, unknown>;
+    if (object.schemaVersion === 1 || legacyKeys.some(key => key in object)) throw new HelperError('preferences_migration_required');
   }
-  catch (error) {
-    if (error instanceof UserError) throw error;
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new UserError(`No ${CONFIG_PATH} exists in ${root}. Run "spellagent init${root === process.cwd() ? '' : ` --root ${JSON.stringify(root)}`}" first.`);
-    }
-    throw new UserError(`Cannot read ${CONFIG_PATH}: ${(error as Error).message}`);
-  }
-  let parsed: unknown;
-  try { parsed = JSON.parse(raw); }
-  catch { throw new UserError(`${CONFIG_PATH} is not valid JSON.`); }
-  const result = configSchema.safeParse(parsed);
-  if (!result.success) throw new UserError(`${CONFIG_PATH} is invalid: ${result.error.issues[0]?.message ?? 'schema mismatch'}`);
+  const result = preferencesSchema.safeParse(input);
+  if (!result.success) throw new HelperError('invalid_preferences');
   return result.data;
 }
 
-export function resolveRequestedPath(input: string, cwd: string, root: string): string {
-  const absolute = path.resolve(cwd, input);
-  const relative = path.relative(root, absolute);
-  if (relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))) return absolute;
-  throw new UserError(`Requested path is outside the project root: ${input}`);
+export async function loadPreferences(root: string, overrides: InvocationPreferences = {}): Promise<Preferences> {
+  let project = preferencesSchema.parse({ schemaVersion: 2 });
+  let bytes: Buffer | undefined;
+  try { bytes = await readLocalFile(path.join(root, CONFIG_PATH), 64 * 1024); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new HelperError('preferences_read_failed');
+  }
+  if (bytes !== undefined) {
+    let value: unknown;
+    try { value = JSON.parse(strictUtf8(bytes).replace(/^\uFEFF/u, '')); }
+    catch { throw new HelperError('invalid_preferences_json'); }
+    project = parsePreferences(value);
+  }
+  const invocation = invocationPreferencesSchema.safeParse(overrides);
+  if (!invocation.success) throw new HelperError('invalid_preferences');
+  const effective: Preferences = {
+    schemaVersion: 2,
+    dialect: invocation.data.dialect ?? project.dialect,
+    include: invocation.data.include ?? project.include,
+    includeHidden: invocation.data.includeHidden ?? project.includeHidden,
+    exclude: [...new Set([...project.exclude, ...(invocation.data.exclude ?? [])])],
+    glossary: [...new Set([...project.glossary, ...(invocation.data.glossary ?? [])])],
+  };
+  try { compileGlobs(effective.include); compileGlobs(effective.exclude); }
+  catch { throw new HelperError('invalid_glob'); }
+  return effective;
 }

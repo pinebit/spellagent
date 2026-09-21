@@ -12,6 +12,9 @@ explicitly says the session or requested work is finished, then run applicable
 checks once. For parser, contract, or packaging changes, run npm run check and
 npm run test:pack. Default checks must remain offline and credential-free.
 Live host evaluations require explicit opt-in and may consume paid usage.
+Claude qualification/tests are deferred by user instruction until the entire
+project is implemented and a subscription is available; keep its package in
+implementation scope. Package checks currently default to Codex only.
 Required platform qualification is macOS and Linux; use npm run test:linux for
 isolated Docker verification. Windows is intentionally untested. Record actual
 OS/architecture, host/client, model, and runtime evidence; never infer passes.
@@ -52,6 +55,6 @@ Host conversation retention is outside the helper's control. No rollback/replay,
 recover/resume commands, or repository-wide atomicity claims.
 
 Phase A is read-only feasibility on bundled synthetic fixtures; no project scan
-or edits. Keep retained legacy code isolated from plugin packages until its
-Phase B migration/removal. Old CLI/provider tests are regression coverage only,
-not current product requirements. Keep developer probes outside the helper.
+or edits. Phase B adds read-only project discovery, preferences, and extraction; editing
+remains Phase C. The legacy CLI/provider implementation was removed in Phase B.
+Keep developer probes outside the helper.
