@@ -98,8 +98,25 @@ try {
       policyHash: discovery.policyHash, snapshotHash: discovery.items[0].snapshot.sha256 });
     assert.equal(extraction.snapshot.bom, true);
     assert.ok(extraction.items.some(item => item.kind === 'segment' && item.editable.includes('sentense')));
+    const segmentItems = extraction.items.filter(item => item.kind === 'segment');
+    const correctionTarget = segmentItems.find(item => item.editable.includes('sentense'));
+    const responses = segmentItems.map(item => ({ segmentId: item.segmentId, proposals: item === correctionTarget ? [{
+      original: 'sentense', replacement: 'sentence', category: 'spelling', reason: 'Correct a misspelling.',
+    }] : [] }));
+    const preview = run({ protocolVersion: 2, operation: 'validate-file', root: project, path: 'notes.md',
+      policyHash: extraction.policyHash, snapshotHash: extraction.snapshotHash, responses });
+    assert.equal(preview.acceptedCount, 1); assert.equal(preview.filesChanged, 0);
     assert.equal(await readFile(path.join(project, 'notes.md'), 'utf8'), source);
     assert.deepEqual(await readdir(project), ['notes.md']);
+    const applied = run({ protocolVersion: 2, operation: 'apply-file', root: project, path: 'notes.md',
+      policyHash: extraction.policyHash, snapshotHash: extraction.snapshotHash, responses });
+    assert.equal(applied.acceptedCount, 1); assert.equal(applied.filesChanged, 1);
+    assert.equal(await readFile(path.join(project, 'notes.md'), 'utf8'), source.replace('sentense', 'sentence'));
+    const logFiles = await readdir(path.join(project, '.spellagent/logs'));
+    assert.equal(logFiles.length, 1);
+    const applicationLog = await readFile(path.join(project, '.spellagent/logs', logFiles[0]), 'utf8');
+    assert.ok(applicationLog.includes('write_complete'));
+    assert.ok(!applicationLog.includes('sentense') && !applicationLog.includes('sentence'));
     await writeFile(path.join(project, '.spellagentrc.json'), '{"schemaVersion":1,"provider":{}}');
     const migration = spawnSync(process.execPath, [helper], { cwd, env,
       input: JSON.stringify({ protocolVersion: 2, operation: 'discover', root: project }), encoding: 'utf8' });
@@ -115,14 +132,14 @@ try {
     for (const [input, code] of [
       ['not JSON', 'invalid_json'],
       [Buffer.from([0xff]), 'invalid_json'],
-      ['x'.repeat(64 * 1024 + 1), 'request_too_large'],
+      ['x'.repeat(2 * 1024 * 1024 + 1), 'request_too_large'],
     ]) {
       const invalid = spawnSync(process.execPath, [helper], { cwd, env, input,
         encoding: 'utf8', timeout: 30_000 });
       assert.equal(invalid.status, 2);
       assert.equal(JSON.parse(invalid.stdout).code, code);
     }
-    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['core', 'discovery', 'extractors', 'plugin']);
+    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['core', 'discovery', 'editing', 'extractors', 'plugin']);
     const dependencies = JSON.parse(await readFile(path.join(runtime, 'dependencies.json'), 'utf8'));
     assert.ok(dependencies.some(entry => entry.name === 'web-tree-sitter'));
     assert.ok(!dependencies.some(entry => /ai-sdk|^ai$|commander/.test(entry.name)));
@@ -132,7 +149,7 @@ try {
     assert.ok(skill.startsWith('---\n'));
     assert.ok((await readFile(path.join(plugin, 'skills/check/workflow.md'), 'utf8')).length > 0);
     assert.deepEqual(await readdir(cwd), [], 'Helper wrote into working directory');
-    console.log(`${host}: isolated packaged fixture/project preview passed (not a host integration pass).`);
+    console.log(`${host}: isolated packaged fixture/project protocol passed (not a host integration pass).`);
   }
 } finally {
   await permissions(temporary, false);

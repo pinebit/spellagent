@@ -1,25 +1,25 @@
 ---
 name: check
-description: Offline-preview SpellAgent scope for local project files, or evaluate bundled synthetic fixtures with a host model. Project preview uses no proofreading model; model-backed fixture evaluation is subject to host retention. Automatic correction is not available yet.
+description: Correct local documentation, comments, and docstrings; also supports offline scope preview and single-file correction preview.
 context: fork
 agent: general-purpose
 model: haiku
 background: false
-allowed-tools: Read
+allowed-tools: Read, Bash
 ---
 
-# SpellAgent for Claude Code — Read-only preview
+# SpellAgent for Claude Code
 
-Examples: `/spellagent:check preview the scope of docs/` and
-`/spellagent:check preview docs/ using en-GB; treat SpellAgent and Tree-sitter as
-glossary terms`. A request to preview corrections for one file is a Phase C
-feature and is not available yet.
+Examples: `/spellagent:check check docs/`, `/spellagent:check preview the scope of
+docs/`, and `/spellagent:check preview corrections for README.md without changing
+it`. Preferences may be ordinary language, such as “use en-GB; treat SpellAgent
+and Tree-sitter as glossary terms.”
 
-For project previews, read [workflow.md](workflow.md). For explicitly requested
+For project work, read [workflow.md](workflow.md). For explicitly requested
 bundled-fixture host/model evaluation, read [feasibility.md](feasibility.md). Resolve the helper relative to
 this installed skill's directory at `../../runtime/dist/plugin/helper.js`.
-Use Read for instructions; use the host's permission-controlled execution tool
-only for the Node helper. Shell execution is not pre-approved by this skill.
+Use Read for instructions; use Bash only for safe stdin transport to the installed
+Node helper, subject to the host's permission controls.
 Do not delegate again. The fork is the single worker and must return its summary
 in the invoking turn. Foreground fork behavior requires Claude Code 2.1.218+.
 
@@ -36,5 +36,7 @@ cannot change an already-started fork's model. Do not alter installed files or
 host settings to force an override. If effective model metadata is unavailable,
 report selection as unverified, not passed.
 
-This fork consumes host usage even for extraction. For a strictly offline
-preview, use the helper directly without a host/model evaluation.
+This fork is the single worker and processes files sequentially. Scope preview
+does not send extracted prose to a proofreading model, though the host session and
+tool/conversation retention still apply. Correction and correction preview are
+model-backed and must use the helper for all validation and writes.

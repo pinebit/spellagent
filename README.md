@@ -10,22 +10,23 @@ The maintained design is [docs/plan.md](docs/plan.md).
 
 ## Current status
 
-Phase B's read-only offline engine and expanded preview contract passed offline verification on macOS/Linux arm64:
-optional preferences, local discovery, paged extraction, coverage accounting, and
-scope preview. It does not proofread or correct project files yet. The retired
-CLI and provider integration have been removed.
+Phase C's safe-editing implementation is now offline-verified: optional preferences,
+local discovery, paged extraction, complete proposal validation, single-file
+correction preview, freshness/policy checks, project locking, source-free logs,
+and atomic per-file replacement. Checks passed on macOS and isolated Linux arm64.
+The retired CLI and provider integration remain removed.
 
-Phase B verification passed on 2026-09-21, including isolated Codex package checks.
+Phase C verification passed on 2026-09-21, including isolated Codex package checks.
 Installed-host behavior remains unqualified. Codex host evidence and remaining
 gates are recorded in the maintained plan. At the user's request, all Claude
 qualification/tests are deferred until the entire project is implemented and a
 subscription is available. Both host packages remain in implementation scope.
 Nothing is published automatically.
 
-The planned user experience is one `check` skill: `/spellagent:check` in Claude
-Code and the corresponding installed skill in Codex. Normal invocation will
-apply validated corrections one file at a time; a plain preview is an offline
-scope inventory, while a future single-file correction preview will use a model
+The user experience is one `check` skill: `/spellagent:check` in Claude Code and
+the corresponding installed skill in Codex. Normal invocation applies validated
+corrections one file at a time; a plain preview is an offline scope inventory,
+while a single-file correction preview uses a model and validates proposals
 without writing source.
 Optional preferences cover dialect, scope, hidden paths, and glossary.
 Existing local modifications are allowed. English en-US/en-GB and macOS/Linux
@@ -64,8 +65,8 @@ npm run build:plugins
 Output: `build/plugins/codex/spellagent/` and
 `build/plugins/claude/spellagent/`. Each contains a manifest, generated skill,
 compiled helper, runtime dependencies, grammars, and licenses. Recipients should
-not need npm or development dependencies. These are read-only candidates,
-not qualified releases. See [Phase B handoff](docs/phase-b.md).
+not need npm or development dependencies. These are self-contained candidates,
+not qualified releases. See [Phase C handoff](docs/phase-c.md).
 
 For isolated Linux verification, after verification is authorized:
 
@@ -81,8 +82,8 @@ other architectures, or installed host behavior.
 ## Repository layout
 
 - `src/extractors/`: existing AST extraction, protection, and byte mappings.
-- `src/core/`, `src/discovery/`, `src/plugin/`: shared contracts, local discovery,
-  read-only protocol, and bundled synthetic fixtures.
+- `src/core/`, `src/discovery/`, `src/editing/`, `src/plugin/`: shared contracts,
+  local discovery, safe editing, protocol, and bundled synthetic fixtures.
 - `plugins/`: host manifests and shared workflow/host instruction sources.
 - `scripts/build-plugins.mjs`: self-contained artifact assembly.
 - `docs/plan.md`: maintained design and phase evidence.
@@ -95,7 +96,8 @@ and case-sensitive glossary terms. Invocation exclusions and glossary terms
 extend project values. Old provider/limit configurations fail with migration
 guidance and remain unchanged. See [protocol and preferences](docs/phase-b.md).
 
-The installed helper accepts version-2 discover/extract requests over stdin.
+The installed helper accepts version-2 discover, extract, validate-file, and
+apply-file requests over stdin.
 Preview reports effective settings, per-format eligible coverage, reason-grouped
 skips/failures, suppressed and unchecked coverage, and zero files changed. It
 explains empty or unexpectedly narrow scope; `.txt` is explicitly unsupported in
@@ -109,11 +111,11 @@ deferral is lifted. Building both packages does not run Claude or consume usage.
 
 ## Safety and privacy
 
-The helper makes no network requests and launches no subprocesses. Future model
-calls happen within the host and follow its permissions, billing, and retention.
-Extracted prose is untrusted input. Source/proposals must not be saved as helper
-state. The current helper has no filesystem writes or application logs; later
-writes will use source-free logs and per-file validation, not saved backups or rollback.
+The helper makes no network requests and launches no subprocesses. Model calls
+happen within the host and follow its permissions, billing, and retention.
+Extracted prose is untrusted input. Source/proposals are not saved as helper
+state. Correction mode writes only validated source files plus source-free events
+under `.spellagent/logs/`; it creates no backups and provides no rollback.
 
 ## License
 

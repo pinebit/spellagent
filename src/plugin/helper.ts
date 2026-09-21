@@ -17,7 +17,10 @@ try {
   try {
     input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
   } catch { throw new ProtocolError('invalid_json'); }
-  process.stdout.write(JSON.stringify({ ok: true, ...await handleRequest(input) }) + '\n');
+  const cancellation = new AbortController();
+  process.once('SIGINT', () => cancellation.abort());
+  process.once('SIGTERM', () => cancellation.abort());
+  process.stdout.write(JSON.stringify({ ok: true, ...await handleRequest(input, cancellation.signal) }) + '\n');
 } catch (error) {
   // Never echo input, parser exceptions, stack traces, or filesystem paths.
   const code = error instanceof ProtocolError ? error.code : 'extraction_failed';

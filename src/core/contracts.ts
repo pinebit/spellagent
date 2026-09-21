@@ -50,3 +50,20 @@ export const segmentSchema = z.strictObject({
   context: z.array(z.string()),
 });
 export type Segment = z.infer<typeof segmentSchema>;
+
+export const proposalCategorySchema = z.enum([
+  'spelling', 'grammar', 'punctuation', 'capitalization', 'usage', 'other',
+]);
+export const proposalSchema = z.strictObject({
+  original: z.string().min(1).max(512),
+  replacement: z.string().max(1024),
+  category: proposalCategorySchema,
+  reason: z.string().min(1).max(500).refine(value =>
+    !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value), 'Invalid reason text'),
+});
+export const segmentResponseSchema = z.strictObject({
+  segmentId: idSchema,
+  proposals: z.array(proposalSchema).max(128),
+});
+export type Proposal = z.infer<typeof proposalSchema>;
+export type SegmentResponse = z.infer<typeof segmentResponseSchema>;

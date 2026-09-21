@@ -7,7 +7,7 @@ requested live host/model feasibility evaluation on bundled fixtures.
 
 ## When not to use
 
-Do not scan or correct project files: those features are not implemented. Explain
+Do not scan or correct project files in this synthetic protocol-1 evaluation. Explain
 that limitation if the user asks. Use ordinary host assistance for unrelated tasks.
 
 ## Essential constraints

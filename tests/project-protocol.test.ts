@@ -209,7 +209,7 @@ it('explains empty and narrow scope, including unsupported text files', async ()
   expect((await discover(root)).summary).toMatchObject({ filesEligible: 3, filesConsidered: 11, narrowCoverage: true });
 });
 
-it('pages diagnostics as well as prose and rejects source-bearing or write requests', async () => {
+it('pages diagnostics as well as prose and rejects source-bearing or malformed edit requests', async () => {
   const root = await project();
   await writeFile(path.join(root, 'protected.md'), Array.from({ length: 50 }, () => '```ts\nconst x = 1;\n```\n').join('\n'));
   const first = await extract(root, 'protected.md');

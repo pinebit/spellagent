@@ -1,21 +1,23 @@
 {
   "name": "spellagent",
   "version": "0.0.0",
-  "description": "Read-only local proofreading scope and extraction preview; no project edits.",
+  "description": "Safe local proofreading for documentation, comments, and docstrings, with scope and correction previews.",
   "author": {
     "name": "SpellAgent contributors"
   },
   "license": "MIT",
   "skills": "./skills/",
   "interface": {
-    "displayName": "SpellAgent (Preview)",
-    "shortDescription": "Preview proofreading scope and prose coverage.",
-    "longDescription": "Read-only implementation candidate. Automatic correction is not available yet.",
+    "displayName": "SpellAgent",
+    "shortDescription": "Correct local prose with validated per-file edits.",
+    "longDescription": "Proofread local documentation, comments, and supported docstrings; apply locally validated corrections or preview scope and single-file proposals.",
     "developerName": "SpellAgent contributors",
     "category": "Productivity",
-    "capabilities": [],
+    "capabilities": ["Write"],
     "defaultPrompt": [
-      "Preview SpellAgent proofreading coverage for this project."
+      "Check this project with SpellAgent.",
+      "Preview SpellAgent scope for this project.",
+      "Preview SpellAgent corrections for README.md."
     ]
   }
 }

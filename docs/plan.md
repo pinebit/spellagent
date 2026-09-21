@@ -1,6 +1,6 @@
 # SpellAgent: Plugin Product and Implementation Plan
 
-Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B's read-only engine and expanded preview UX passed their recorded offline checks. Editing is not implemented or qualified. See sections 14–15 for evidence, unresolved gates, and user-authorized deferrals.
+Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B's read-only engine and expanded preview UX passed their recorded offline checks. Phase C editing has passed its offline macOS and isolated Linux arm64 checks; installed-host and live-model qualification remain open. See sections 14–16 for evidence, unresolved gates, and user-authorized deferrals.
 
 ## 1. Product direction
 
@@ -536,3 +536,47 @@ check. Dependency preparation used network access; checks ran with container
 networking disabled. Phase A's installed-host/model gates and the user-directed
 Claude deferral remain unchanged. No installation, publication, or marketplace
 change was performed.
+
+## 16. Phase C implementation and offline verification — 2026-09-21
+
+The user authorized proceeding with Phase C. The candidate adds strict complete-file
+proposal contracts, locally reconstructed byte ranges, unique-original and protected-
+range checks, overlap/delimiter/whitespace/rewrite bounds, combined-candidate reparsing,
+and extraction-shape invariants. `validate-file` powers a write-free single-file
+correction preview. `apply-file` repeats extraction and policy checks, acquires one
+project write lock, writes and syncs a secure same-directory temporary file, records
+source-free intent/completion or abort events, performs final freshness/policy checks,
+and atomically replaces one file while preserving its mode. Signal cancellation is
+checked before replacement and owned temporary files and locks are cleaned during
+normal failure handling.
+
+Both host workflows now describe correction, scope preview, and correction preview;
+require one response for every eligible segment; use a single sequential worker; and
+report partial completion, privacy boundaries, observable documentation limitations,
+and the residual last-instant editor race. Packaging includes the editing engine and
+offline package coverage now exercises correction preview and apply behavior. See
+[phase-c.md](phase-c.md) for the protocol and safety handoff.
+
+### Authorized verification — 2026-09-21
+
+The user explicitly requested checks, commit, and push after implementation ended.
+
+- macOS (Darwin) arm64, Node v24.14.1, npm 11.12.1: `npm run check`
+  passed typechecking, build, 32 tests across seven files, and all eight parser
+  probes. `npm run test:pack` built both host artifacts and passed the isolated
+  Codex packaged fixture/project protocol, including correction preview, apply,
+  and source-free logging behavior.
+- Linux aarch64/arm64, Node v24.14.1, npm 11.11.0: `npm run test:linux`
+  passed the same 32 tests, eight parser probes, and isolated Codex package check.
+  The initial sandbox attempt could not access Docker's socket; the authorized
+  retry succeeded.
+- The skill-creator and plugin-creator validators passed on the generated Codex
+  artifact. PyYAML was fetched into an isolated temporary uv cache; no project or
+  system dependency was installed.
+- No host/client or model was exercised by these offline checks. Both packages
+  were built, but Claude qualification/tests remain deferred by the user's standing
+  instruction. No x64, Windows, installed-host, or live-model pass is inferred.
+
+Phase C's offline checks are satisfied for the tested arm64 platforms. Remaining
+release gates include installed-host workflow behavior and measured model quality.
+No plugin was installed or published, and no marketplace change was performed.

@@ -2,5 +2,5 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "spellagent",
   "version": "0.0.0",
-  "description": "Read-only local proofreading scope and extraction preview; no project edits."
+  "description": "Safe local proofreading for documentation, comments, and docstrings, with scope and correction previews."
 }
