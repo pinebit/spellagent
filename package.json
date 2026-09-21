@@ -2,7 +2,7 @@
   "name": "spellagent",
   "version": "0.0.0",
   "private": true,
-  "description": "Review spelling and grammar corrections in local documentation and source comments",
+  "description": "Host-native proofreading plugins for Codex and Claude Code",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -16,15 +16,16 @@
     "assets",
     "README.md",
     "LICENSE",
-    "docs/plan.md"
+    "docs/new-plan.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "build:plugins": "npm run build && node scripts/build-plugins.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run build && npm test && npm run probe",
     "probe": "node dist/probes/offline.js",
-    "test:pack": "node scripts/test-pack.mjs",
+    "test:pack": "node scripts/test-plugin-pack.mjs",
     "smoke:live": "node dist/probes/live.js",
     "prepack": "npm run build",
     "pack:local": "npm run build && npm pack --ignore-scripts",
@@ -62,13 +63,12 @@
     "url": "https://github.com/pinebit/spellagent/issues"
   },
   "keywords": [
-    "cli",
+    "codex-plugin",
+    "claude-code-plugin",
     "spell-checker",
     "grammar-checker",
     "documentation",
     "typescript",
-    "tree-sitter",
-    "ai-sdk",
-    "ai-gateway"
+    "tree-sitter"
   ]
 }

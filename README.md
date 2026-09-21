@@ -1,138 +1,104 @@
 # SpellAgent
 
-A local CLI for correcting spelling and grammar in documentation and source comments.
-**Phase 1 offline build:** interactive `init`, filesystem-only discovery, syntax-aware
-prose extraction, and `run --dry-run` are implemented. Provider inference and source
-editing remain Phase 2–3 work; a non-dry `run` currently exits with an actionable error.
-See [the implementation plan](docs/plan.md) for phase gates and current evidence.
+Spelling and grammar correction for documentation, source comments, and docstrings,
+delivered as **Codex and Claude Code plugins**. The host supplies authentication
+and an inexpensive, overridable model; a shared local helper extracts prose and
+will validate and apply minimal corrections. No SpellAgent API keys or standalone
+CLI are part of the new product.
 
-The workflow has only two commands: `spellagent init` and `spellagent run`.
-Setup is always interactive and writes `.spellagentrc.json`. A run requires
-that configuration, applies validated corrections without review/apply prompts,
-and leaves you to inspect the resulting local changes. Existing modifications are
-valid input; files changed during a run are protected by freshness checks.
-`run --dry-run` previews scope and protected/unsupported constructs offline without
-credentials, inference, or source changes.
+The maintained design is [docs/new-plan.md](docs/new-plan.md). The previous CLI
+design and its evidence are archived in [docs/old-plan.md](docs/old-plan.md).
 
-```sh
-spellagent init
-spellagent run --dry-run
-spellagent run docs src --dry-run --format json
-```
+## Current status
 
-Hidden files/directories are excluded by default; `includeHidden` opts eligible
-hidden paths into scope, while safety exclusions still apply. Setup offers a
-low-cost model for the explicitly selected connection and a configurable
-`limits.maxAgents` ceiling (default 32). Account/model rate limits can reduce actual
-parallelism. Config stays at the root; only source-free run logs persist under `.spellagent/`;
-there are no saved results, review/apply/run-management commands, or retention setting.
+Repository migration and a Phase A implementation candidate are implemented.
+The candidate only extracts **bundled synthetic fixtures**, with bounded JSON
+pages. It does not scan projects, proofread user files, or apply edits.
+On macOS arm64 and Linux arm64, typecheck/build, 35 tests, eight parser probes,
+and both isolated plugin packages passed on 2026-09-21. Codex manifest/skill
+validation and Claude manifest validation also passed on macOS.
+Host installation and live model selection remain unverified.
+Nothing is published or installed automatically.
+
+The planned user experience is one `check` skill: `/spellagent:check` in Claude
+Code and the corresponding installed skill in Codex. Normal invocation will
+apply validated corrections one file at a time; preview will remain read-only.
+Optional preferences will cover dialect, scope, hidden paths, and glossary.
+Existing local modifications are allowed. English en-US/en-GB and macOS/Linux
+are the intended initial scope; Windows remains untested.
 
 ## Development
 
-Requires Node.js 24 or newer and npm. Install pinned dependencies, then verify:
+Requires Node.js 24+ and npm. Dependency installation requires npm access:
 
 ```sh
 npm ci
-npm run prepare:pack-cache
+```
+
+The repository disables dependency lifecycle scripts. Official grammar packages
+supply WASM assets; no native compiler or grammar generation is required.
+
+Do not run checks during an implementation session. Once the user explicitly
+declares the session/work finished, run the applicable checks once:
+
+```sh
 npm run check
 npm run test:pack
 ```
 
-The repository's `.npmrc` disables dependency lifecycle scripts. Official grammar
-packages include WASM assets; no compiler or grammar generation is needed.
-The build copies those assets and their licenses. Default tests and parser probes
-make no network calls and require no API keys. The packed-install check uses npm's
-local cache; `npm run prepare:pack-cache` populates the metadata and archives
-needed for fresh packed installs. That explicit preparation command accesses npm;
-a missing cache entry in `test:pack` fails rather than fetching.
-Initial dependency installation requires access to npm. Run `npm run build` before
-running `npm test` alone so the parser assets exist. Use `npm run pack:local` to
-build and pack explicitly, since lifecycle scripts are disabled.
+`check` typechecks, builds, runs offline tests, and runs synthetic parser probes.
+`test:pack` builds self-contained plugin directories and exercises their helper
+from an unrelated directory with spaces. Neither invokes an LLM nor installs a
+plugin into a host. Host checks are separate, explicitly opted-in evaluations.
+
+Build the development plugin artifacts explicitly with:
 
 ```sh
-node dist/cli/index.js --help
-npm run probe
+npm run build:plugins
 ```
 
-`npm run probe` runs a separate developer entry point and parses fixed synthetic fixtures for JavaScript, TypeScript, TSX, Python,
-Java, Go, Rust, and Markdown. It does not scan the current directory or modify source.
-With Docker running, verify Linux in isolated containers:
+Output: `build/plugins/codex/spellagent/` and
+`build/plugins/claude/spellagent/`. Each contains a manifest, generated skill,
+compiled helper, runtime dependencies, grammars, and licenses. Recipients should
+not need npm or development dependencies. These are feasibility candidates,
+not qualified releases. See [Phase A handoff](docs/phase-a.md).
+
+For isolated Linux verification, after verification is authorized:
 
 ```sh
 npm run test:linux
 ```
 
-This downloads a pinned official Node image if needed, installs Linux dependencies
-in a temporary volume, then runs checks and local/global packed installations with
-networking disabled. The volume and containers are removed afterward; the image
-stays cached. No host dependencies or API credentials are forwarded.
+This prepares dependencies in Docker, then runs checks with container networking
+disabled. Image/dependency preparation requires network access. No host
+credentials are forwarded. Historical arm64 passes do not qualify this pivot,
+other architectures, or installed host behavior.
 
-See the [Phase 0 evidence](docs/plan.md#11-phase-0-implementation-evidence) and
-[Phase 1 implementation status](docs/plan.md#12-phase-1-implementation-evidence).
+## Repository layout
 
-## Providers and credentials
+- `src/extractors/`: existing AST extraction, protection, and byte mappings.
+- `src/plugin/`: read-only Phase A helper and synthetic fixtures.
+- `plugins/`: host manifests and shared workflow/host instruction sources.
+- `scripts/build-plugins.mjs`: self-contained artifact assembly.
+- `docs/new-plan.md`: maintained design and phase evidence.
 
-SpellAgent uses **Vercel AI SDK** for three explicitly selected connections:
+The old CLI, provider modules, configuration, and associated tests remain
+temporarily for regression continuity. They are not shipped in plugin artifacts
+and should not be extended. Phase B will migrate reusable discovery/contracts
+and remove obsolete API/CLI code and dependencies. Legacy npm executable
+metadata is transitional, not the distribution strategy. Do not use old `init`
+or `run` instructions to configure the plugins.
 
-| Connection | Model ID | Required environment variable |
-| --- | --- | --- |
-| Direct OpenAI (`openai`) | Native OpenAI model ID | `OPENAI_API_KEY` |
-| Direct Anthropic (`anthropic`) | Native Anthropic model ID | `ANTHROPIC_API_KEY` |
-| Vercel AI Gateway (`gateway`) | `vendor/model` | `AI_GATEWAY_API_KEY` |
+## Safety and privacy
 
-Gateway sends prose through Vercel to the configured upstream allowlist. It needs
-only the Gateway key; direct-provider keys are not forwarded. Gateway requires
-explicit upstream routes (`only` in config); no implicit model or connection fallback.
-See the [AI SDK Gateway documentation](https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway).
-
-Use only the key for your selected connection. `.env.example` lists the names;
-`.env` is ignored and is not automatically loaded. Explicit `--env-file` loading will
-be added with production inference in Phase 2. Initialization and dry-run stay offline
-for every connection,
-including Gateway. Pricing remains explicitly supplied by the user. Bundled setup suggestions are
-OpenAI `gpt-5.4-nano`, Anthropic `claude-haiku-4-5-20251001`, and Gateway
-`openai/gpt-5.4-nano` with an explicitly confirmed OpenAI route. You can override
-the model during setup. These are low-cost candidates awaiting live and quality
-qualification, not measured workload winners. See the dated sources and gates in
-[the model selection plan](docs/plan.md#model-suggestions-and-scheduling).
-
-An optional smoke test sends only a fixed synthetic sentence. It performs one
-request, disables SDK retries, sets a 512-token output limit and a 30-second timeout,
-and prints schema validity and usage without source text or credentials.
-It is not a qualified production adapter or a guarantee of a billing cap.
-To run it, set the provider key in your existing process environment and choose
-an explicit model that supports structured output:
-
-```sh
-npm run build
-npm run smoke:live -- openai YOUR_MODEL_ID --allow-paid
-# Or:
-npm run smoke:live -- anthropic YOUR_MODEL_ID --allow-paid
-# Or use Gateway with an explicit upstream:
-npm run smoke:live -- gateway openai/YOUR_MODEL_ID --allow-paid --only openai
-```
-
-This is opt-in and can incur provider charges. Default checks never run it.
-
-## Distribution
-
-The qualified platform targets are macOS and Linux. Windows is intentionally
-untested and is not a release gate.
-
-The intended distribution is an npm package with a `spellagent` executable,
-installed globally or invoked with `npx`. The repository currently uses version
-`0.0.0` and `private: true` to prevent accidental publication. Nothing is published.
-The npm archive includes compiled JavaScript, bundled grammars, and license notices;
-users will not need development dependencies or a native compiler.
-
-The product operates on local files and has no Git/GitHub integration. Development
-packaging scripts invoke npm; those scripts are not part of product command execution.
+The helper makes no network requests and launches no subprocesses. Future model
+calls happen within the host and follow its permissions, billing, and retention.
+Extracted prose is untrusted input. Source/proposals must not be saved as helper
+state. Phase A has no filesystem writes or application logs; later writes will
+use source-free logs and per-file validation, not saved backups or rollback.
 
 ## License
 
-[MIT](LICENSE), copyright 2026 SpellAgent contributors. Bundled parsers retain
-separate upstream MIT notices, copied verbatim into `assets/licenses/` during build
-and included in the npm archive. `assets/inventory.json` records each grammar's
-source package, version, size, and SHA-256. The web-tree-sitter runtime and other
-npm dependencies retain their own licenses. See the dated inventory in
-[the plan](docs/plan.md#11-phase-0-implementation-evidence).
+[MIT](LICENSE). Bundled grammars retain their upstream licenses in
+`runtime/assets/licenses/`; runtime dependency packages retain their own license
+files. Generated inventories identify packaged dependencies and grammar hashes.

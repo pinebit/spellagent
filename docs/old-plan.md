@@ -1,5 +1,10 @@
 # SpellAgent: Product and Implementation Design
 
+> Historical CLI design, archived 2026-09-21. Superseded by [new-plan.md](new-plan.md).
+> Preserve as implementation evidence, not current requirements. The opening
+> status below is stale; section 12 records the subsequent Phase 1 verification.
+> Those results do not qualify the plugin implementation.
+
 Status: Phase 1 implementation candidate, 2026-09-20. The revised Phase 0 is complete on macOS arm64 and Linux arm64; Phase 1 offline discovery/extraction is implemented but awaits the single end-of-session verification run requested by repository policy. Windows is intentionally untested. This document defines the intended v1, phased work, and implementation evidence. Planned behavior is not a claim of verified functionality. See sections 11–12 for current evidence.
 
 ## 1. Product decisions

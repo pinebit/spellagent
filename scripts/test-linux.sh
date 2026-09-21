@@ -14,7 +14,7 @@ cd -- "$spellagent_root"
 # Copy only development inputs, excluding host dependencies, local credentials,
 # version-control metadata, generated assets, and saved application runs.
 COPYFILE_DISABLE=1 tar --no-xattrs --exclude='._*' -cf - package.json package-lock.json tsconfig.json tsconfig.build.json \
-  vitest.config.ts .npmrc LICENSE README.md AGENTS.md docs src tests scripts |
+  vitest.config.ts .npmrc LICENSE README.md AGENTS.md docs src tests scripts plugins |
   docker run --rm -i --mount "type=volume,source=$spellagent_volume,target=/workspace" \
     --env npm_config_cache=/workspace/npm-cache --env npm_config_update_notifier=false --env NO_COLOR=1 \
     "$spellagent_image" sh -ec '
@@ -22,11 +22,10 @@ COPYFILE_DISABLE=1 tar --no-xattrs --exclude='._*' -cf - package.json package-lo
       cd "/workspace/project with spaces"
       tar -xf -
       npm ci --no-audit --no-fund
-      npm run prepare:pack-cache
     '
 
 # Dependency installation is the only network-enabled stage. The same volume
-# carries the Linux dependencies and npm cache into a fresh, offline container.
+# carries the Linux dependencies into a fresh, offline container.
 docker run --rm --network none \
   --mount "type=volume,source=$spellagent_volume,target=/workspace" \
   --workdir '/workspace/project with spaces' \

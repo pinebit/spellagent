@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "spellagent",
+  "version": "0.0.0",
+  "description": "Read-only synthetic proofreading feasibility preview; no project edits."
+}

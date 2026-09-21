@@ -1,5 +1,5 @@
 // Offline setup candidates, not implicit provider defaults or qualified adapters.
-// Sources and remaining qualification gates: docs/plan.md, section 6.
+// Legacy CLI only. Historical sources: docs/old-plan.md, section 6.
 export const MODEL_SUGGESTIONS = {
   openai: { model: 'gpt-5.4-nano', source: 'https://developers.openai.com/api/docs/models/gpt-5.4-nano' },
   anthropic: { model: 'claude-haiku-4-5-20251001', source: 'https://platform.claude.com/docs/en/models/haiku-4-5/overview' },

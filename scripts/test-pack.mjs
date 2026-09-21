@@ -1,3 +1,4 @@
+// Historical CLI packaging probe, retained until Phase B. Not npm run test:pack.
 import { mkdtemp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,7 @@ const prepareCache = args[0] === '--prepare-cache';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const npmCli = process.env.npm_execpath;
-if (!npmCli) throw new Error('Run through npm run test:pack');
+if (!npmCli) throw new Error('Legacy probe requires npm execution (prepare:pack-cache)');
 const temporary = await mkdtemp(path.join(tmpdir(), 'spellagent-pack-'));
 const npm = (args, cwd) => execFileSync(process.execPath, [npmCli, ...args], {
   cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
@@ -20,7 +21,7 @@ try {
   npm(['run', 'build'], root);
   const packed = JSON.parse(npm(['pack', '--json', '--ignore-scripts', '--pack-destination', temporary], root))[0];
   const files = packed.files.map(file => file.path);
-  for (const required of ['LICENSE', 'docs/plan.md', 'assets/inventory.json', 'dist/cli/index.js']) {
+  for (const required of ['LICENSE', 'docs/new-plan.md', 'assets/inventory.json', 'dist/cli/index.js']) {
     assert.ok(files.includes(required), `Missing ${required}`);
   }
   assert.equal(files.filter(file => file.endsWith('.wasm')).length, 7);

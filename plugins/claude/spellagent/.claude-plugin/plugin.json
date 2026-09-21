@@ -1,0 +1,7 @@
+{
+  "name": "spellagent",
+  "version": "0.0.0",
+  "description": "Read-only synthetic proofreading feasibility preview; no project edits.",
+  "author": { "name": "SpellAgent contributors" },
+  "license": "MIT"
+}
