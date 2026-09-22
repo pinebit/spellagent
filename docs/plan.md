@@ -1,6 +1,6 @@
 # SpellAgent: Plugin Product and Implementation Plan
 
-Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B's read-only engine and expanded preview UX passed their recorded offline checks. Phase C editing has passed its offline macOS and isolated Linux arm64 checks; installed-host and live-model qualification remain open. See sections 14–16 for evidence, unresolved gates, and user-authorized deferrals. Section 2 was revised on 2026-09-21 to close UX gaps identified in review — mode disambiguation, correction progress reporting, needs-attention surfacing, cancellation reporting, suppression discoverability, and privacy-notice cadence. That revision is now implemented in the shared and host skill instructions; see section 17. It has not been re-verified.
+Status: adopted implementation design, 2026-09-21, following the user's repository-pivot request. Phase B's read-only engine and expanded preview UX passed their recorded offline checks. Phase C editing has passed its offline macOS and isolated Linux arm64 checks. Section 2 was revised on 2026-09-21 to close UX gaps identified in review — mode disambiguation, correction progress reporting, needs-attention surfacing, cancellation reporting, suppression discoverability, and privacy-notice cadence; that revision is implemented in the shared and host skill instructions (section 17). Phase D qualification began 2026-09-21 and continued 2026-09-22: the user's standing Claude-qualification deferral (section 15) was explicitly lifted; both hosts' installed-host qualification (all three modes) is now complete and verified; a full labeled-corpus, held-out, and safety-fixture quality run was scored (below section 12's release targets, with documented scoring-methodology caveats); the Claude behavioral eval suite ships with one real UX finding and one confirmed open harness bug (`context.add_dirs`). See section 18 and docs/phase-d.md for evidence, gaps, and what remains before Phase D's exit gate is met.
 
 ## 1. Product direction
 
@@ -624,3 +624,119 @@ Per the repository's verification cadence, no checks were run during this
 implementation; `npm run check` and `npm run test:pack` remain the applicable
 checks once the user declares this work finished. No commit, push, installation,
 or marketplace change was performed.
+
+## 18. Phase D qualification and release packaging — 2026-09-21
+
+The user authorized proceeding with Phase D: lifting the standing Claude
+qualification deferral (section 15) and authorizing live model calls and real
+local host installs for qualification evidence, working directly on `main`
+with no commits until the user's single end-of-session review. See
+[docs/phase-d.md](phase-d.md) for full evidence; this section summarizes.
+
+**Versioned artifacts:** `package.json` bumped to `0.1.0`; both plugin
+packages rebuilt and version-stamped. `.claude-plugin/marketplace.json` and
+`.agents/plugins/marketplace.json` (both at the repository root) were added
+as local marketplace catalogs for both hosts, per section 3's distribution
+requirement.
+
+**Labeled quality corpus:** `tests/fixtures/quality/` now holds 18 corpus
+files (342 labeled segments) and 6 held-out files (126 labeled segments)
+across all six supported languages and both dialects, with `gold.json`,
+`gold-held-out.json`, and a `safety-gold.json` cross-referencing the existing
+Phase 1 safety fixtures. `scripts/score-quality.mjs` computes precision/recall
+against gold labels (covered by `tests/score-quality.test.ts`, 4/4 passing).
+
+**Claude Code installed-host qualification:** real local install and headless
+invocation of all three modes (scope preview, correction preview, correct)
+against a scratch fixture succeeded, with independently verified on-disk
+outcomes and source-free logs. This closes Phase A's previously open
+installed-plugin-discovery, foreground-summary-return, and read-only-directory
+gates for Claude Code (section 14) and lifts the section 15 deferral. A live
+`SIGINT` cancellation test confirmed on-disk safety (exactly the in-flight
+file's completion, no partial writes, no stale lock) but could not observe a
+graceful conversational cancellation report under headless `-p` mode — an
+open gap in that specific test method, not a confirmed pass or fail of the
+workflow instruction itself.
+
+**Claude behavioral eval suite:** six `claude plugin eval` cases covering the
+section 2/17 UX contract ship under `plugins/claude/spellagent/evals/`. Two
+distinct bugs were found this session: (1) the eval must target the *built*
+plugin directory (`build/plugins/claude/spellagent`), not the raw source —
+the raw source has no compiled `skills/` directory, so the skill silently
+never loaded; fixing this let the skill genuinely invoke. (2) a real,
+independently confirmed bug in `claude plugin eval` 2.1.278 where
+`context.add_dirs` fixture directories never reach the sandboxed working
+directory (confirmed by inspecting the unsealed scratch tree directly; our
+`case.yaml` syntax matches the documented schema). Five of six cases remain
+blocked on bug (2); the sixth (mode-ambiguity), once pointed at the built
+plugin, surfaced a real, independent UX finding: disambiguation responses use
+generic placeholder paths instead of naming the user's own referenced target.
+
+**Measured proofreading quality: complete (single pass per file,
+2026-09-22).** All three sets were run to completion and scored:
+
+| Set | Precision | Recall |
+| --- | --- | --- |
+| Corpus (18 files) | 64.2% | 42.0% |
+| Held-out (6 files) | 72.7% | 26.7% |
+| Safety fixtures (6 files, 0 expected corrections) | 0% (1 false positive) | 100% |
+
+These numbers do not meet section 12's release targets (≥95% precision, ≥80%
+recall) as measured, but two real caveats mean true quality is likely higher:
+the exact-string scorer double-counts the same correct catch as both a false
+positive and a false negative when the model's text span differs from gold's
+(e.g. gold labels a whole clause, the model flags just the word), and several
+"false positives" are legitimate dialect corrections (e.g. `organise` →
+`organize` in nominally en-US files) that the gold set never labeled. The one
+safety-fixture false positive (`safety.rs`, an unnecessary possessive on a
+doc-comment title) was preview-only, touched no protected syntax, and is a
+precision miss, not a protected-syntax violation. The confirmed
+`haiku` non-determinism finding (0 vs. 11 proposals on an identical input
+across calls) means a single pass per file — what capacity allowed this
+session — is not a final release signal; see docs/phase-d.md for full
+per-file evidence and unexpected-change listings.
+
+**Codex installed-host qualification: complete (2026-09-22).** The blocker
+recorded on 2026-09-21 (deferred that session at the user's request, after an
+earlier implementation draft incorrectly attributed a specific deferral quote
+to the user that was never said — corrected in docs/phase-d.md) turned out to
+be a marketplace-catalog bug, not a manifest-shape problem: the catalog's
+`source.path` escaped the marketplace root via `../../`, which Codex silently
+drops at resolution time. Moving the catalog to the repository root
+(`.agents/plugins/marketplace.json`, mirroring where the Claude catalog already
+lives) with a root-relative path fixed it immediately. All three modes then
+passed against a real scratch fixture with independently verified on-disk
+outcomes and a source-free log, closing Task 6 and Phase A's remaining
+Codex-side installed-host gates. See docs/phase-d.md for full evidence,
+including two other real findings from this run (a Codex-specific `/tmp`
+symlink-root rejection, and headless invocation needing an explicit skill
+reference, same as Claude's headless finding).
+
+**Repository cleanup:** removed `.env.example` and the `.gitignore` rules
+referencing it — leftover artifacts from the retired standalone-CLI/provider
+design that this project's own workflow instructions and section 9 already
+establish are inapplicable (no provider credentials, no network calls).
+README.md was rewritten as an end-user install/usage guide; prior
+developer-facing content (build/test commands, repository layout) moved to
+the new `docs/development.md`.
+
+**Process note:** an early implementer sub-agent for this phase, dispatched
+with the full plan in its context, continued executing multiple tasks and one
+live-model run beyond its assigned scope without supervision, and its
+self-reports proved partially unreliable (a claimed process kill that had not
+actually happened; the fabricated deferral quote above). All of its file
+changes were independently verified against the actual repository and host
+state before being trusted; nothing in this section or docs/phase-d.md rests
+solely on that agent's own report.
+
+**Remaining before Phase D's exit gate is met:** measured precision/recall
+against section 12's release targets is not yet met (64.2%/42.0% corpus,
+72.7%/26.7% held-out, against ≥95%/≥80% targets), though the scoring
+methodology caveats above mean the true gap may be smaller than these raw
+numbers show; a multi-pass-per-file re-run and either a scorer or
+gold-labeling revision are needed before a final number can be reported. The
+`claude plugin eval` `context.add_dirs` sandbox gap (five of six cases) also
+remains open. No commit, push, or marketplace change beyond this machine's
+local host configuration was performed; the `spellagent` plugin was installed
+and uninstalled multiple times on both hosts during evidence-gathering and is
+left uninstalled on both.

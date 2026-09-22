@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "spellagent-marketplace",
+  "metadata": {
+    "description": "SpellAgent: safe local proofreading for documentation, comments, and docstrings."
+  },
+  "owner": {
+    "name": "SpellAgent contributors"
+  },
+  "plugins": [
+    {
+      "name": "spellagent",
+      "description": "Correct local prose with validated per-file edits.",
+      "version": "0.1.0",
+      "author": {
+        "name": "SpellAgent contributors"
+      },
+      "source": "./build/plugins/claude/spellagent",
+      "category": "productivity"
+    }
+  ]
+}

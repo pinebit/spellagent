@@ -5,6 +5,4 @@ assets/
 coverage/
 *.tgz
 .spellagent/
-.env
-.env.*
-!.env.example
+evals/results/

@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: suppression-discoverability
+description: >
+  Whenever suppressedSegments is greater than zero, scope preview must report
+  the count and point to the suppression syntax, so users can discover it
+  before running correction, not only after a rejected suggestion.
+tags: [ux, section2]
+context:
+  add_dirs: [sample]
+execution:
+  prompt: |
+    /spellagent:check preview the scope of sample
+  max_turns: 10
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill, Task]
+runs: 3
+expected_outcome: >
+  The response's suppressed-segment count is paired with a mention of the
+  spellagent-disable suppression syntax in the same response.

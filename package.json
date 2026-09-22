@@ -1,6 +1,6 @@
 {
   "name": "spellagent",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Host-native proofreading plugins for Codex and Claude Code",
   "license": "MIT",

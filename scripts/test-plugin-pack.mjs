@@ -13,7 +13,7 @@ const build = spawnSync('npm', ['run', 'build:plugins'], { cwd: root, env, stdio
 assert.equal(build.status, 0, 'Plugin build failed');
 const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'spellagent plugin checks ')));
 // Claude qualification/tests are explicitly deferred by the project owner.
-const hosts = (process.env.SPELLAGENT_TEST_HOSTS ?? 'codex').split(',');
+const hosts = (process.env.SPELLAGENT_TEST_HOSTS ?? 'codex,claude').split(',');
 assert.ok(hosts.length > 0 && hosts.every(host => ['codex', 'claude'].includes(host)), 'Invalid test hosts');
 async function permissions(directory, readonly) {
   await chmod(directory, readonly ? 0o555 : 0o755);

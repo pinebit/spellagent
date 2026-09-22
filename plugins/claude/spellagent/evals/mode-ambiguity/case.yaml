@@ -1,0 +1,20 @@
+schema_version: "1.1"
+name: mode-ambiguity
+description: >
+  A vague request naming a directory should never guess between scope preview
+  and correction preview; it must restate both interpretations as copyable
+  examples naming the user's own target and take no action.
+tags: [ux, section2]
+context:
+  add_dirs: [sample]
+execution:
+  prompt: |
+    /spellagent:check sample maybe, not sure if I want a preview or the real thing.
+  max_turns: 10
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill, Task]
+runs: 3
+expected_outcome: >
+  The response asks the user to choose, offering both a scope-preview and a
+  correction-preview phrasing that name "sample" or one of its files, and
+  performs no file writes.

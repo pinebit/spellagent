@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: needs-attention-upfront
+description: >
+  When any file needs attention, the Result line must state that count up
+  front, alongside the correction/file count, not only later in the transcript.
+tags: [ux, section2]
+context:
+  add_dirs: [sample]
+scaffold_script: |
+  mkdir -p sample/.spellagent
+  printf 'held by an unrelated process\n' > sample/.spellagent/write.lock
+execution:
+  prompt: |
+    /spellagent:check check sample
+  max_turns: 20
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Task, Bash, Edit, Write]
+runs: 3
+expected_outcome: >
+  The Result line itself (the first line of the final summary) states both
+  the correction/file count and a "need attention" (or "needs attention")
+  count together, because locked.md cannot be safely written while
+  sample/.spellagent/write.lock exists.

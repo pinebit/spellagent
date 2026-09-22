@@ -1,124 +1,119 @@
 # SpellAgent
 
-Spelling and grammar correction for documentation, source comments, and docstrings,
-delivered as **Codex and Claude Code plugins**. The host supplies authentication
-and an inexpensive, overridable model; a shared local helper extracts prose and
-will validate and apply minimal corrections. No SpellAgent API keys or standalone
-CLI are part of the new product.
+Safe, local proofreading for your documentation, source comments, and
+docstrings — as a plugin for Claude Code and Codex. Your existing host
+handles authentication and model access; SpellAgent finds prose safely and
+applies only validated corrections, one file at a time.
 
-The maintained design is [docs/plan.md](docs/plan.md).
+## What it corrects
 
-## Current status
+- Markdown and GFM
+- JavaScript, TypeScript, JSX, TSX comments
+- Go, Rust, Java comments and documentation comments
+- Python comments and docstrings
 
-Phase C's safe-editing implementation is now offline-verified: optional preferences,
-local discovery, paged extraction, complete proposal validation, single-file
-correction preview, freshness/policy checks, project locking, source-free logs,
-and atomic per-file replacement. Checks passed on macOS and isolated Linux arm64.
-The retired CLI and provider integration remain removed.
+English spelling, grammar, punctuation, capitalization, and usage only — no
+translation, rewriting, identifier renaming, or factual correction. Code
+examples, URLs, paths, placeholders, and identifiers are always protected.
 
-Phase C verification passed on 2026-09-21, including isolated Codex package checks.
-Installed-host behavior remains unqualified. Codex host evidence and remaining
-gates are recorded in the maintained plan. At the user's request, all Claude
-qualification/tests are deferred until the entire project is implemented and a
-subscription is available. Both host packages remain in implementation scope.
-Nothing is published automatically.
+## Install
 
-The user experience is one `check` skill: `/spellagent:check` in Claude Code and
-the corresponding installed skill in Codex. Normal invocation applies validated
-corrections one file at a time; a plain preview is an offline scope inventory,
-while a single-file correction preview uses a model and validates proposals
-without writing source.
-Optional preferences cover dialect, scope, hidden paths, and glossary.
-Existing local modifications are allowed. English en-US/en-GB and macOS/Linux
-are the intended initial scope; Windows remains untested.
-
-## Development
-
-Requires Node.js 24+ and npm. Dependency installation requires npm access:
+The plugin isn't published to a public marketplace yet. Install it directly
+from a local clone of this repository:
 
 ```sh
+git clone https://github.com/pinebit/spellagent.git
+cd spellagent
 npm ci
-```
-
-The repository disables dependency lifecycle scripts. Official grammar packages
-supply WASM assets; no native compiler or grammar generation is required.
-
-Do not run checks during an implementation session. Once the user explicitly
-declares the session/work finished, run the applicable checks once:
-
-```sh
-npm run check
-npm run test:pack
-```
-
-`check` typechecks, builds, runs offline tests, and runs synthetic parser probes.
-`test:pack` builds both self-contained plugin directories and exercises the
-Codex helper from an unrelated directory with spaces. Neither invokes an LLM nor installs a
-plugin into a host. Host checks are separate, explicitly opted-in evaluations.
-
-Build the development plugin artifacts explicitly with:
-
-```sh
 npm run build:plugins
 ```
 
-Output: `build/plugins/codex/spellagent/` and
-`build/plugins/claude/spellagent/`. Each contains a manifest, generated skill,
-compiled helper, runtime dependencies, grammars, and licenses. Recipients should
-not need npm or development dependencies. These are self-contained candidates,
-not qualified releases. See [Phase C handoff](docs/phase-c.md).
-
-For isolated Linux verification, after verification is authorized:
+### Claude Code
 
 ```sh
-npm run test:linux
+claude plugin marketplace add /path/to/spellagent
+claude plugin install spellagent@spellagent-marketplace
 ```
 
-This prepares dependencies in Docker, then runs checks with container networking
-disabled. Image/dependency preparation requires network access. No host
-credentials are forwarded. Historical arm64 passes do not qualify this pivot,
-other architectures, or installed host behavior.
+### Codex
 
-## Repository layout
+```sh
+codex plugin marketplace add /path/to/spellagent
+codex plugin add spellagent@spellagent-codex-marketplace
+```
 
-- `src/extractors/`: existing AST extraction, protection, and byte mappings.
-- `src/core/`, `src/discovery/`, `src/editing/`, `src/plugin/`: shared contracts,
-  local discovery, safe editing, protocol, and bundled synthetic fixtures.
-- `plugins/`: host manifests and shared workflow/host instruction sources.
-- `scripts/build-plugins.mjs`: self-contained artifact assembly.
-- `docs/plan.md`: maintained design and phase evidence.
+Requires no separate API keys and no compiler — the plugin ships its own
+runtime dependencies and grammar files; only the one-time `npm ci` and
+`npm run build:plugins` above need npm.
 
-## Optional preferences and preview
+## Use it
 
-No initialization is required. An optional root `.spellagentrc.json` uses
-`schemaVersion: 2` and may set dialect, include/exclude globs, includeHidden,
-and case-sensitive glossary terms. Invocation exclusions and glossary terms
-extend project values. Old provider/limit configurations fail with migration
-guidance and remain unchanged. See [protocol and preferences](docs/phase-b.md).
+In Claude Code:
 
-The installed helper accepts version-2 discover, extract, validate-file, and
-apply-file requests over stdin.
-Preview reports effective settings, per-format eligible coverage, reason-grouped
-skips/failures, suppressed and unchecked coverage, and zero files changed. It
-explains empty or unexpectedly narrow scope; `.txt` is explicitly unsupported in
-v1. Symlinks, hard links, mandatory exclusions, unsupported encodings, and files
-over 1 MiB are excluded. Version-1 synthetic fixtures remain available
-for deferred host feasibility evaluations.
+```
+/spellagent:check check docs/
+/spellagent:check preview the scope of docs/
+/spellagent:check preview corrections for README.md without changing it
+```
 
-Claude tests are currently deferred by user instruction. Package checks default
-to Codex only; `SPELLAGENT_TEST_HOSTS=codex,claude` restores both only after that
-deferral is lifted. Building both packages does not run Claude or consume usage.
+Preferences can be given in ordinary language: "use en-GB; treat SpellAgent as
+a glossary term" for one term, or "treat SpellAgent, Tree-sitter, and Codex as
+glossary terms" for several.
 
-## Safety and privacy
+In Codex, ask the same requests in ordinary language — "Check `docs/`.",
+"Preview the scope of `docs/`.", "Preview corrections for `README.md` without
+changing it.", "Check `docs/` using en-GB; treat `SpellAgent` as a glossary
+term." — and the installed skill responds the same way.
 
-The helper makes no network requests and launches no subprocesses. Model calls
-happen within the host and follow its permissions, billing, and retention.
-Extracted prose is untrusted input. Source/proposals are not saved as helper
-state. Correction mode writes only validated source files plus source-free events
-under `.spellagent/logs/`; it creates no backups and provides no rollback.
+Three modes:
+
+| Ask for | What happens |
+| --- | --- |
+| "Check ..." / "Correct ..." | Reviews eligible files and applies validated corrections automatically. |
+| "Preview the scope of ..." | Offline inventory of what would be reviewed and why other content is skipped. No model call, no writes. |
+| "Preview corrections for \<one file\>" | Reviews and shows proposed corrections for exactly one named file. No writes. |
+
+## Preferences (optional)
+
+Add an optional `.spellagentrc.json` at your project root:
+
+```json
+{
+  "schemaVersion": 2,
+  "dialect": "en-GB",
+  "includeHidden": false,
+  "glossary": ["SpellAgent", "Tree-sitter"]
+}
+```
+
+Everything works with sensible defaults if you skip this file.
+
+## Suppressing a specific line or region
+
+```
+<!-- spellagent-disable-next-line -->
+This line is intentionally left as-is.
+```
+
+`spellagent-disable` / `spellagent-enable` mark a suppressed region; source
+files use their own language's comment syntax with the same directive text.
+
+## Privacy
+
+Correction and correction-preview modes send extracted prose to your selected
+host model; scope preview never does. Model retention follows your host or
+organization's policy — SpellAgent doesn't control it. The local helper
+itself makes no network calls, stores no prompts or source text, and never
+stages, commits, or publishes changes; inspect what changed with your own
+tools.
+
+## Contributing
+
+See [docs/development.md](docs/development.md) for build/test commands and
+[docs/plan.md](docs/plan.md) for the maintained design and phase evidence.
 
 ## License
 
 [MIT](LICENSE). Bundled grammars retain their upstream licenses in
-`runtime/assets/licenses/`; runtime dependency packages retain their own license
-files. Generated inventories identify packaged dependencies and grammar hashes.
+`runtime/assets/licenses/`; runtime dependency packages retain their own
+license files.

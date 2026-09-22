@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: privacy-notice-cadence
+description: >
+  Show the full privacy notice on a conversation's first model-backed
+  invocation, and only a one-line reminder on a later one in the same
+  conversation when settings are unchanged.
+tags: [ux, section2]
+context:
+  add_dirs: [sample]
+execution:
+  prompt: |
+    /spellagent:check preview corrections for sample/a.md
+
+    After that finishes, in this same conversation, also run:
+    /spellagent:check preview corrections for sample/b.md
+
+    Show both responses in full, clearly separated.
+  max_turns: 20
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Task]
+runs: 3
+expected_outcome: >
+  The first correction-preview response includes the full privacy notice
+  (mentioning that extracted prose is processed by the host model and may be
+  retained under host/organization policy). The second correction-preview
+  response, later in the same conversation with unchanged settings, shows
+  only a short one-line reminder rather than repeating the full notice.

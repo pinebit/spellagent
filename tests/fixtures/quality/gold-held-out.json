@@ -1,0 +1,404 @@
+[
+  {
+    "path": "held-out/md/md-1-en-us.md",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "unforseen",
+        "original": "unforseen",
+        "replacement": "unforeseen",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "yeild",
+        "original": "yeild",
+        "replacement": "yield",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "sucessful",
+        "original": "sucessful",
+        "replacement": "successful",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "the release lands in",
+        "original": "the release lands in january",
+        "replacement": "the release lands in January",
+        "category": "capitalization"
+      },
+      {
+        "segmentHint": "maintainance",
+        "original": "maintainance",
+        "replacement": "maintenance",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "refered",
+        "original": "refered",
+        "replacement": "referred",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "begining",
+        "original": "begining",
+        "replacement": "beginning",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "however you should r",
+        "original": "however you should review it",
+        "replacement": "however, you should review it",
+        "category": "punctuation"
+      },
+      {
+        "segmentHint": "definitly",
+        "original": "definitly",
+        "replacement": "definitely",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "arguement",
+        "original": "arguement",
+        "replacement": "argument",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  },
+  {
+    "path": "held-out/ts/ts-1-en-us.ts",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "begining",
+        "original": "begining",
+        "replacement": "beginning",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "definitly",
+        "original": "definitly",
+        "replacement": "definitely",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "arguement",
+        "original": "arguement",
+        "replacement": "argument",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "however you should r",
+        "original": "however you should review it",
+        "replacement": "however, you should review it",
+        "category": "punctuation"
+      },
+      {
+        "segmentHint": "dissapear",
+        "original": "dissapear",
+        "replacement": "disappear",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "acheive",
+        "original": "acheive",
+        "replacement": "achieve",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "wich",
+        "original": "wich",
+        "replacement": "which",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "we cant find the fil",
+        "original": "we cant find the file",
+        "replacement": "we can't find the file",
+        "category": "punctuation"
+      },
+      {
+        "segmentHint": "thier",
+        "original": "thier",
+        "replacement": "their",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "funtion",
+        "original": "funtion",
+        "replacement": "function",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  },
+  {
+    "path": "held-out/go/go-1-en-us.go",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "wich",
+        "original": "wich",
+        "replacement": "which",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "thier",
+        "original": "thier",
+        "replacement": "their",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "funtion",
+        "original": "funtion",
+        "replacement": "function",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "we cant find the fil",
+        "original": "we cant find the file",
+        "replacement": "we can't find the file",
+        "category": "punctuation"
+      },
+      {
+        "segmentHint": "mstake",
+        "original": "mstake",
+        "replacement": "mistake",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "sentance",
+        "original": "sentance",
+        "replacement": "sentence",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "obvoius",
+        "original": "obvoius",
+        "replacement": "obvious",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "there going to fix i",
+        "original": "there going to fix it soon",
+        "replacement": "they're going to fix it soon",
+        "category": "usage"
+      },
+      {
+        "segmentHint": "documnet",
+        "original": "documnet",
+        "replacement": "document",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "procces",
+        "original": "procces",
+        "replacement": "process",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  },
+  {
+    "path": "held-out/rs/rs-1-en-us.rs",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "obvoius",
+        "original": "obvoius",
+        "replacement": "obvious",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "documnet",
+        "original": "documnet",
+        "replacement": "document",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "procces",
+        "original": "procces",
+        "replacement": "process",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "there going to fix i",
+        "original": "there going to fix it soon",
+        "replacement": "they're going to fix it soon",
+        "category": "usage"
+      },
+      {
+        "segmentHint": "consistantly",
+        "original": "consistantly",
+        "replacement": "consistently",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "definately",
+        "original": "definately",
+        "replacement": "definitely",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "recieve",
+        "original": "recieve",
+        "replacement": "receive",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "he dont need the ext",
+        "original": "he dont need the extra step",
+        "replacement": "he doesn't need the extra step",
+        "category": "grammar"
+      },
+      {
+        "segmentHint": "occured",
+        "original": "occured",
+        "replacement": "occurred",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "seperate",
+        "original": "seperate",
+        "replacement": "separate",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  },
+  {
+    "path": "held-out/java/SampleJava1.java",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "recieve",
+        "original": "recieve",
+        "replacement": "receive",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "occured",
+        "original": "occured",
+        "replacement": "occurred",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "seperate",
+        "original": "seperate",
+        "replacement": "separate",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "he dont need the ext",
+        "original": "he dont need the extra step",
+        "replacement": "he doesn't need the extra step",
+        "category": "grammar"
+      },
+      {
+        "segmentHint": "existance",
+        "original": "existance",
+        "replacement": "existence",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "accomodate",
+        "original": "accomodate",
+        "replacement": "accommodate",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "becuase",
+        "original": "becuase",
+        "replacement": "because",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "it could of been sim",
+        "original": "it could of been simpler",
+        "replacement": "it could have been simpler",
+        "category": "grammar"
+      },
+      {
+        "segmentHint": "neccessary",
+        "original": "neccessary",
+        "replacement": "necessary",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "publically",
+        "original": "publically",
+        "replacement": "publicly",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  },
+  {
+    "path": "held-out/py/py-1-en-us.py",
+    "dialect": "en-US",
+    "corrections": [
+      {
+        "segmentHint": "becuase",
+        "original": "becuase",
+        "replacement": "because",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "neccessary",
+        "original": "neccessary",
+        "replacement": "necessary",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "publically",
+        "original": "publically",
+        "replacement": "publicly",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "it could of been sim",
+        "original": "it could of been simpler",
+        "replacement": "it could have been simpler",
+        "category": "grammar"
+      },
+      {
+        "segmentHint": "priviledge",
+        "original": "priviledge",
+        "replacement": "privilege",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "enviroment",
+        "original": "enviroment",
+        "replacement": "environment",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "greatful",
+        "original": "greatful",
+        "replacement": "grateful",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "we will loose the co",
+        "original": "we will loose the connection",
+        "replacement": "we will lose the connection",
+        "category": "usage"
+      },
+      {
+        "segmentHint": "untill",
+        "original": "untill",
+        "replacement": "until",
+        "category": "spelling"
+      },
+      {
+        "segmentHint": "comitted",
+        "original": "comitted",
+        "replacement": "committed",
+        "category": "spelling"
+      }
+    ],
+    "cleanSegmentCount": 11
+  }
+]

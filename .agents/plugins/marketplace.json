@@ -1,0 +1,20 @@
+{
+  "name": "spellagent-codex-marketplace",
+  "interface": {
+    "displayName": "SpellAgent"
+  },
+  "plugins": [
+    {
+      "name": "spellagent",
+      "source": {
+        "source": "local",
+        "path": "./build/plugins/codex/spellagent"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

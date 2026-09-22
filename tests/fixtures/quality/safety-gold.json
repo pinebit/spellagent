@@ -1,0 +1,8 @@
+[
+  { "path": "../phase1/safety.md", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 12 },
+  { "path": "../phase1/safety.ts", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 2 },
+  { "path": "../phase1/safety.go", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 2 },
+  { "path": "../phase1/safety.rs", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 1 },
+  { "path": "../phase1/safety.py", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 3 },
+  { "path": "../phase1/Safety.java", "dialect": "en-US", "corrections": [], "cleanSegmentCount": 2 }
+]

@@ -12,9 +12,10 @@ explicitly says the session or requested work is finished, then run applicable
 checks once. For parser, contract, or packaging changes, run npm run check and
 npm run test:pack. Default checks must remain offline and credential-free.
 Live host evaluations require explicit opt-in and may consume paid usage.
-Claude qualification/tests are deferred by user instruction until the entire
-project is implemented and a subscription is available; keep its package in
-implementation scope. Package checks currently default to Codex only.
+The user's earlier standing Claude qualification deferral was explicitly lifted
+during Phase D (docs/plan.md section 18); package checks now default to both
+Codex and Claude. Both hosts' installed-host qualification is complete — see
+docs/phase-d.md for evidence.
 Required platform qualification is macOS and Linux; use npm run test:linux for
 isolated Docker verification. Windows is intentionally untested. Record actual
 OS/architecture, host/client, model, and runtime evidence; never infer passes.
