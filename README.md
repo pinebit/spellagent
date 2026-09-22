@@ -109,8 +109,8 @@ tools.
 
 ## Contributing
 
-See [docs/development.md](docs/development.md) for build/test commands and
-[docs/plan.md](docs/plan.md) for the maintained design and phase evidence.
+See [AGENTS.md](AGENTS.md) for architecture, the helper protocol, build/test
+commands, and known limitations.
 
 ## License
 
