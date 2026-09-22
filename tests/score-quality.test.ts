@@ -64,4 +64,32 @@ describe('scoreQuality', () => {
     expect(result.recall).toBe(1);
     expect(result.unexpectedChanges).toHaveLength(0);
   });
+
+  it('counts proposals on a path absent from the gold set as false positives', () => {
+    const gold = [{ path: 'a.md', dialect: 'en-US', corrections: [], cleanSegmentCount: 1 }];
+    const predictions = [{ path: 'unlabeled.md', proposals: [{ original: 'x', replacement: 'y', category: 'other' }] }];
+    const result = scoreQuality(gold, predictions);
+    expect(result.falsePositives).toBe(1);
+    expect(result.unexpectedChanges).toEqual([{ path: 'unlabeled.md', original: 'x', replacement: 'y' }]);
+    expect(result.precision).toBe(0);
+  });
+
+  it('merges proposals from duplicate path entries instead of dropping the earlier one', () => {
+    const gold = [
+      {
+        path: 'a.md',
+        dialect: 'en-US',
+        corrections: [{ segmentHint: 's1', original: 'teh', replacement: 'the', category: 'spelling' }],
+        cleanSegmentCount: 0,
+      },
+    ];
+    const predictions = [
+      { path: 'a.md', proposals: [{ original: 'teh', replacement: 'the', category: 'spelling' }] },
+      { path: 'a.md', proposals: [{ original: 'extra', replacement: 'wrong', category: 'other' }] },
+    ];
+    const result = scoreQuality(gold, predictions);
+    expect(result.truePositives).toBe(1);
+    expect(result.falsePositives).toBe(1);
+    expect(result.unexpectedChanges).toEqual([{ path: 'a.md', original: 'extra', replacement: 'wrong' }]);
+  });
 });

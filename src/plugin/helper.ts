@@ -1,4 +1,5 @@
-import { handleRequest, MAX_REQUEST_BYTES, ProtocolError, PROTOCOL_VERSION } from './protocol.js';
+import { handleRequest, isEditOperation, MAX_DISCOVERY_REQUEST_BYTES, MAX_REQUEST_BYTES, ProtocolError,
+  PROTOCOL_VERSION } from './protocol.js';
 import { MIGRATION_GUIDANCE } from '../discovery/config.js';
 
 // One JSON document in, one JSON document out. No public argv interface.
@@ -17,6 +18,8 @@ try {
   try {
     input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
   } catch { throw new ProtocolError('invalid_json'); }
+  const operation = typeof input === 'object' && input !== null && 'operation' in input ? input.operation : undefined;
+  if (!isEditOperation(operation) && size > MAX_DISCOVERY_REQUEST_BYTES) throw new ProtocolError('request_too_large');
   const cancellation = new AbortController();
   process.once('SIGINT', () => cancellation.abort());
   process.once('SIGTERM', () => cancellation.abort());

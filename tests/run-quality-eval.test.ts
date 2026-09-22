@@ -44,4 +44,26 @@ Effective settings:
       { original: 'a apple', replacement: 'an apple', category: 'grammar' },
     ]);
   });
+
+  it('records a deletion proposal even though its replacement cell is empty', () => {
+    const resultText = `
+| Original | Replacement | Category |
+| --- | --- | --- |
+| cant | | spelling |
+`;
+    expect(parseProposals(resultText)).toEqual([
+      { original: 'cant', replacement: '', category: 'spelling' },
+    ]);
+  });
+
+  it('does not split a code-span pipe into a new column, and unescapes an escaped pipe', () => {
+    const resultText = `
+| Original | Replacement | Category |
+| --- | --- | --- |
+| \`a|b\` | a\\|b | usage |
+`;
+    expect(parseProposals(resultText)).toEqual([
+      { original: '`a|b`', replacement: 'a|b', category: 'usage' },
+    ]);
+  });
 });

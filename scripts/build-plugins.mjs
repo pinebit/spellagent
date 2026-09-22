@@ -89,6 +89,14 @@ try {
     await writeFile(path.join(runtime, 'dependencies.json'), JSON.stringify(inventory, null, 2) + '\n');
   }
   await writeFile(path.join(staging, '.spellagent-build.json'), JSON.stringify({ version: pkg.version }) + '\n');
+  // Keep the marketplace catalog's plugin version in sync with package.json
+  // and the manifests written above; otherwise the catalog silently drifts.
+  const marketplacePath = path.join(root, '.claude-plugin/marketplace.json');
+  const marketplace = JSON.parse(await readFile(marketplacePath, 'utf8'));
+  const entry = marketplace.plugins.find(plugin => plugin.name === 'spellagent');
+  if (!entry) throw new Error('Missing spellagent entry in marketplace.json');
+  entry.version = pkg.version;
+  await writeFile(marketplacePath, JSON.stringify(marketplace, null, 2) + '\n');
   let existing;
   try { existing = await lstat(output); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (existing) {

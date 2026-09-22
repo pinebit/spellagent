@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { handleRequest, PAGE_CHARACTERS, PAGE_SEGMENTS } from '../src/plugin/protocol.js';
+import { handleRequest, isEditOperation, PAGE_CHARACTERS, PAGE_SEGMENTS } from '../src/plugin/protocol.js';
 
 async function extract(fixture: string, cursor = 0, snapshotHash?: string) {
   const response = await handleRequest({ protocolVersion: 1, operation: 'extract-fixture',
@@ -67,5 +67,14 @@ describe('synthetic plugin protocol', () => {
     await expect(extract('pages', 1, '0'.repeat(64))).rejects.toThrow('snapshot_mismatch');
     await expect(extract('pages', 1000, first.snapshotHash)).rejects.toThrow('invalid_cursor');
     await expect(extract('pages', -1)).rejects.toThrow('invalid_request');
+  });
+
+  it('classifies only validate-file/apply-file as edit operations for request-size enforcement', () => {
+    expect(isEditOperation('validate-file')).toBe(true);
+    expect(isEditOperation('apply-file')).toBe(true);
+    expect(isEditOperation('discover')).toBe(false);
+    expect(isEditOperation('extract')).toBe(false);
+    expect(isEditOperation(undefined)).toBe(false);
+    expect(isEditOperation(42)).toBe(false);
   });
 });

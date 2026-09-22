@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { MAX_FILE_BYTES, relativePathSchema, type Preferences, type FileSnapshot } from '../core/contracts.js';
+import { MAX_FILE_BYTES, MAX_RESPONSE_SEGMENTS, relativePathSchema, type Preferences, type FileSnapshot } from '../core/contracts.js';
 import { HelperError } from '../core/errors.js';
 import { actualCommentTexts } from '../extractors/code.js';
 import { extractFile } from '../extractors/index.js';
@@ -96,6 +96,12 @@ export async function extractLocalFile(root: string, relative: string, preferenc
     throw new HelperError('parse_failed');
   }
   const prepared = prepareSegments(extraction.segments);
+  // A validate-file/apply-file request must submit every eligible segment's
+  // response in one request; a file with more than that budget can never be
+  // completed, so it must not be reported as eligible.
+  if (prepared.filter(item => item.kind === 'segment').length > MAX_RESPONSE_SEGMENTS) {
+    throw new HelperError('too_many_segments');
+  }
   return { snapshot, source, ...extraction, prepared,
     coverage: { extractedSegments: extraction.segments.length,
       eligibleSegments: prepared.filter(item => item.kind === 'segment').length,
@@ -107,7 +113,7 @@ export async function extractLocalFile(root: string, relative: string, preferenc
 
 const skips = new Set(['hidden_path', 'mandatory_directory', 'mandatory_file', 'credential_file', 'generated_path',
   'generated_marker', 'config_exclude', 'not_included', 'unsupported_format', 'plain_text_unsupported', 'symlink', 'hard_link',
-  'too_large', 'binary', 'invalid_utf8', 'unsafe_path', 'not_regular_file']);
+  'too_large', 'binary', 'invalid_utf8', 'unsafe_path', 'not_regular_file', 'too_many_segments']);
 function failure(relative: string, error: unknown, pathType: DiscoveryEntry['pathType'] = 'unknown'): DiscoveryEntry {
   const code = error instanceof HelperError ? error.code : 'read_failed';
   return { path: relative, pathType, state: skips.has(code) ? 'skipped' : 'failed', code };

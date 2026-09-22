@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { preferencesSchema, invocationPreferencesSchema, relativePathSchema } from '../src/core/contracts.js';
+import { preferencesSchema, invocationPreferencesSchema, relativePathSchema, proposalSchema } from '../src/core/contracts.js';
 import { parsePreferences } from '../src/discovery/config.js';
 import { compileGlobs } from '../src/discovery/globs.js';
 
@@ -22,4 +22,13 @@ it('rejects root escapes and invalid globs', () => {
   for (const glob of ['../**', '/tmp/**', '!a', 'a\\b', '{a,{b,c}}', '{unclosed']) {
     expect(() => compileGlobs([glob]), glob).toThrow();
   }
+});
+
+it('rejects glossary terms and proposal replacements containing a lone UTF-16 surrogate', () => {
+  const lone = '\uD800';
+  expect(preferencesSchema.safeParse({ schemaVersion: 2, glossary: [lone] }).success).toBe(false);
+  expect(invocationPreferencesSchema.safeParse({ glossary: [lone] }).success).toBe(false);
+  expect(invocationPreferencesSchema.safeParse({ glossary: ['valid'] }).success).toBe(true);
+  expect(proposalSchema.safeParse({ original: 'a', replacement: lone, category: 'spelling', reason: 'r' }).success).toBe(false);
+  expect(proposalSchema.safeParse({ original: 'a', replacement: 'valid', category: 'spelling', reason: 'r' }).success).toBe(true);
 });

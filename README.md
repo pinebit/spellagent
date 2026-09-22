@@ -13,8 +13,15 @@ applies only validated corrections, one file at a time.
 - Python comments and docstrings
 
 English spelling, grammar, punctuation, capitalization, and usage only — no
-translation, rewriting, identifier renaming, or factual correction. Code
-examples, URLs, paths, placeholders, and identifiers are always protected.
+translation, rewriting, identifier renaming, or factual correction. URLs,
+paths, placeholders, and identifiers matching common naming conventions
+(snake_case, camelCase, dotted tokens) are protected from editing, as are
+code spans and fenced/tagged code blocks inside recognized documentation
+comments (JSDoc, Javadoc, Rustdoc). This protection is pattern-based, not
+a parser for arbitrary code text: a bare PascalCase identifier or a
+backtick-quoted command inside an ordinary (non-doc) comment can still be
+edited, and the structural validator only rejects a correction if it
+changes something outside these recognized patterns.
 
 ## Install
 

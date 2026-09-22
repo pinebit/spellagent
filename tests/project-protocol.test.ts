@@ -232,6 +232,16 @@ it('retains each supported language in project extraction and its existing prote
   }
 });
 
+it('excludes a file whose eligible-segment count exceeds the edit-response budget', async () => {
+  const root = await project();
+  const source = Array.from({ length: 10_001 }, (_, index) => `Paragraph ${index + 1} has a sentense.`).join('\n\n') + '\n';
+  await writeFile(path.join(root, 'huge.md'), source);
+  const preferences = await loadPreferences(root);
+  await expect(extractLocalFile(root, 'huge.md', preferences)).rejects.toThrow('too_many_segments');
+  const result = await discover(root);
+  expect(result.items).toContainEqual(expect.objectContaining({ path: 'huge.md', state: 'skipped', code: 'too_many_segments' }));
+}, 30_000);
+
 it('preserves glossary byte ranges and syntax-aware suppression through discovery', async () => {
   const root = await project();
   await writeFile(path.join(root, 'note.ts'), '// spellagent-disable-next-line\n// Suppressed sentense.\n// SpellAgent and spellagent have a sentense.\n');

@@ -14,7 +14,7 @@ cd -- "$spellagent_root"
 # Copy only development inputs, excluding host dependencies, local credentials,
 # version-control metadata, generated assets, and saved application runs.
 COPYFILE_DISABLE=1 tar --no-xattrs --exclude='._*' -cf - package.json package-lock.json tsconfig.json tsconfig.build.json \
-  vitest.config.ts .npmrc LICENSE README.md AGENTS.md docs src tests scripts plugins |
+  vitest.config.ts .npmrc LICENSE README.md AGENTS.md src tests scripts plugins |
   docker run --rm -i --mount "type=volume,source=$spellagent_volume,target=/workspace" \
     --env npm_config_cache=/workspace/npm-cache --env npm_config_update_notifier=false --env NO_COLOR=1 \
     --env "SPELLAGENT_TEST_HOSTS=${SPELLAGENT_TEST_HOSTS:-codex}" \

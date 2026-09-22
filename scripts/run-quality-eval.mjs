@@ -4,7 +4,7 @@
 // with scripts/score-quality.mjs. Never run against this repository's own
 // tracked source files -- always point --source at a scratch copy.
 import { execFile } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -19,9 +19,22 @@ function parseArgs(argv) {
     else if (key === '--output') args.output = argv[++i];
     else if (key === '--model') args.model = argv[++i];
     else if (key === '--limit') args.limit = Number(argv[++i]);
+    else if (key === '--gold') args.gold = argv[++i];
   }
-  if (!args.source || !args.output) throw new Error('Usage: --source <dir> --output <file> [--model haiku] [--limit N]');
+  if (!args.source || !args.output) {
+    throw new Error('Usage: --source <dir> --output <file> [--model haiku] [--limit N] [--gold <gold.json>]');
+  }
   return args;
+}
+
+// Maps each corpus file to its labeled dialect so the prompt can request the
+// dialect the gold corrections were labeled against; without this, en-GB
+// fixtures get reviewed under the default en-US and their legitimate
+// dialect spellings are flagged as false positives.
+async function loadDialects(goldPath) {
+  if (!goldPath) return new Map();
+  const gold = JSON.parse(await readFile(goldPath, 'utf8'));
+  return new Map(gold.map((file) => [file.path, file.dialect]));
 }
 
 async function listFiles(dir, base = dir) {
@@ -42,8 +55,24 @@ async function listFiles(dir, base = dir) {
 // specific table whose header names an "original" and a "replacement" column
 // are captured, by tracked column index -- any other pipe-table in the
 // response (per-file totals, coverage breakdowns) is ignored entirely.
+// Splits a Markdown table row on unescaped pipes outside backtick code spans,
+// and keeps empty interior cells (a deletion proposal has an empty
+// replacement cell) while dropping only the leading/trailing delimiter cells.
 function splitRow(line) {
-  return line.split('|').map((c) => c.trim()).filter((c) => c.length > 0);
+  const cells = [];
+  let cell = '';
+  let inCode = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '`') { inCode = !inCode; cell += ch; }
+    else if (ch === '\\' && line[i + 1] === '|' && !inCode) { cell += '|'; i += 1; }
+    else if (ch === '|' && !inCode) { cells.push(cell.trim()); cell = ''; }
+    else cell += ch;
+  }
+  cells.push(cell.trim());
+  if (cells[0] === '') cells.shift();
+  if (cells[cells.length - 1] === '') cells.pop();
+  return cells;
 }
 
 export function parseProposals(resultText) {
@@ -75,7 +104,9 @@ export function parseProposals(resultText) {
     const original = cells[columns.original];
     const replacement = cells[columns.replacement];
     const category = columns.category >= 0 ? cells[columns.category] : undefined;
-    if (original && replacement) {
+    // A deletion proposal has an empty replacement cell, so only `original`
+    // must be non-empty here.
+    if (original !== undefined && original.length > 0 && replacement !== undefined) {
       proposals.push({ original, replacement, category: (category ?? 'other').toLowerCase() });
     }
   }
@@ -84,41 +115,49 @@ export function parseProposals(resultText) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const dialects = await loadDialects(args.gold);
   const scratchRoot = await mkdtemp(path.join(os.tmpdir(), 'spellagent-quality-'));
-  await cp(args.source, scratchRoot, { recursive: true });
-  let files = await listFiles(scratchRoot);
-  if (args.limit) files = files.slice(0, args.limit);
+  try {
+    await cp(args.source, scratchRoot, { recursive: true });
+    let files = await listFiles(scratchRoot);
+    if (args.limit) files = files.slice(0, args.limit);
 
-  const predictions = [];
-  for (const relativePath of files) {
-    const target = path.join(scratchRoot, relativePath);
-    const prompt = `/spellagent:check preview corrections for ${target}`;
-    let resultText = '';
-    try {
-      const { stdout } = await run('claude', [
-        '-p', prompt,
-        '--model', args.model,
-        '--permission-mode', 'acceptEdits',
-        '--output-format', 'json',
-        '--add-dir', scratchRoot,
-      ], { maxBuffer: 1024 * 1024 * 32, timeout: 120_000 });
-      const parsed = JSON.parse(stdout);
-      resultText = parsed.result ?? '';
-    } catch (error) {
-      console.error('FAILED', relativePath, error.message);
-      continue;
+    const predictions = [];
+    for (const relativePath of files) {
+      const target = path.join(scratchRoot, relativePath);
+      const dialect = dialects.get(relativePath);
+      const prompt = dialect
+        ? `/spellagent:check preview corrections for ${target} using ${dialect}`
+        : `/spellagent:check preview corrections for ${target}`;
+      let resultText = '';
+      try {
+        const { stdout } = await run('claude', [
+          '-p', prompt,
+          '--model', args.model,
+          '--permission-mode', 'acceptEdits',
+          '--output-format', 'json',
+          '--add-dir', scratchRoot,
+        ], { maxBuffer: 1024 * 1024 * 32, timeout: 120_000 });
+        const parsed = JSON.parse(stdout);
+        resultText = parsed.result ?? '';
+      } catch (error) {
+        console.error('FAILED', relativePath, error.message);
+        continue;
+      }
+      const proposals = parseProposals(resultText);
+      predictions.push({ path: relativePath, proposals });
+      console.error('done', relativePath, proposals.length, 'proposals');
+      // Write after every file so an interrupted run still leaves usable partial results.
+      await mkdir(path.dirname(args.output), { recursive: true });
+      await writeFile(args.output, JSON.stringify(predictions, null, 2) + '\n', 'utf8');
     }
-    const proposals = parseProposals(resultText);
-    predictions.push({ path: relativePath, proposals });
-    console.error('done', relativePath, proposals.length, 'proposals');
-    // Write after every file so an interrupted run still leaves usable partial results.
+
     await mkdir(path.dirname(args.output), { recursive: true });
     await writeFile(args.output, JSON.stringify(predictions, null, 2) + '\n', 'utf8');
+    console.log(`Wrote ${predictions.length} file predictions to ${args.output}`);
+  } finally {
+    await rm(scratchRoot, { recursive: true, force: true });
   }
-
-  await mkdir(path.dirname(args.output), { recursive: true });
-  await writeFile(args.output, JSON.stringify(predictions, null, 2) + '\n', 'utf8');
-  console.log(`Wrote ${predictions.length} file predictions to ${args.output}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

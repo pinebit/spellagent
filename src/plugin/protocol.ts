@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { countSchema, hashSchema, invocationPreferencesSchema, relativePathSchema,
+import { countSchema, hashSchema, invocationPreferencesSchema, MAX_RESPONSE_SEGMENTS, relativePathSchema,
   segmentResponseSchema } from '../core/contracts.js';
 import { HelperError } from '../core/errors.js';
 import { loadPreferences, resolveProjectRoot } from '../discovery/config.js';
@@ -16,7 +16,13 @@ export { HelperError as ProtocolError } from '../core/errors.js';
 export const PROTOCOL_VERSION = 2;
 export const EXTRACTION_VERSION = 'phase-c-1';
 export const POLICY_VERSION = 'phase-c-1';
+// Edit requests (validate-file/apply-file) carry proposal responses and are
+// allowed the full 2 MiB; every other operation is bounded to 64 KiB per the
+// documented protocol limits in AGENTS.md.
 export const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+export const MAX_DISCOVERY_REQUEST_BYTES = 64 * 1024;
+const EDIT_OPERATIONS = new Set(['validate-file', 'apply-file']);
+export const isEditOperation = (operation: unknown) => typeof operation === 'string' && EDIT_OPERATIONS.has(operation);
 const countByCode = (records: readonly DiscoveryEntry[], state: DiscoveryEntry['state']) => Object.fromEntries(
   [...records.reduce((counts, item) => {
     if (item.state === state) counts.set(item.code ?? 'unknown', (counts.get(item.code ?? 'unknown') ?? 0) + 1);
@@ -46,7 +52,7 @@ const editShared = {
   protocolVersion: z.literal(2), root: z.string().min(1).max(4096),
   preferences: invocationPreferencesSchema.default({}), path: relativePathSchema,
   policyHash: hashSchema, snapshotHash: hashSchema,
-  responses: z.array(segmentResponseSchema).max(10_000),
+  responses: z.array(segmentResponseSchema).max(MAX_RESPONSE_SEGMENTS),
 };
 const requestSchema = z.discriminatedUnion('operation', [
   z.strictObject({ ...shared, operation: z.literal('discover'),

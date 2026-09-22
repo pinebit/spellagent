@@ -1,9 +1,6 @@
 import path from 'node:path';
 import type { FileSnapshot } from '../core/contracts.js';
 
-export const GENERATED_DETECTION_VERSION = '1' as const;
-export const EXTRACTOR_VERSION = '1' as const;
-
 export type SupportedFormat = FileSnapshot['format'];
 export const EXTENSION_FORMAT: Readonly<Record<string, SupportedFormat>> = {
   '.md': 'markdown', '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',

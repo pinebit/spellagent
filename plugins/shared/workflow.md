@@ -133,7 +133,9 @@ with fresh discovery/extraction and model review. Do not inspect or expose helpe
 logs as proofreading results; they contain only source-free paths, hashes, counts,
 diagnostic codes, and write outcomes under `.spellagent/logs/`.
 
-Lock, freshness, replacement, or `changed_log_incomplete` errors are prominent
+Lock, freshness, replacement, or `write_completion_log_failed` errors (the
+latter reported with `fileState: "changed_log_incomplete"` — the file itself
+was replaced, only its completion log entry is missing) are prominent
 needs-attention outcomes. A stale `write.lock` after a hard crash may require the
 user to inspect and remove that specific lock; SpellAgent has no recovery command.
 The final freshness check narrows but cannot eliminate the last-instant race with

@@ -50,6 +50,37 @@ function directives(root: MdNode, lineCount: number) {
   return { disabled, diagnostics, html };
 }
 
+// Remark text nodes can span several physical lines. Splitting only at line
+// boundaries where the suppression status actually changes keeps ordinary
+// multi-line paragraphs as one segment while still letting a `disable`
+// boundary that lands mid-node suppress exactly the lines it covers.
+function lineParts(source: string, start: number, end: number): { start: number; end: number }[] {
+  const parts: { start: number; end: number }[] = [];
+  const NEWLINE = /\r\n|\r|\n/gu;
+  NEWLINE.lastIndex = start;
+  let cursor = start;
+  let match: RegExpExecArray | null;
+  while (cursor < end && (match = NEWLINE.exec(source)) && match.index < end) {
+    const lineEnd = match.index + match[0].length;
+    parts.push({ start: cursor, end: Math.min(lineEnd, end) });
+    cursor = lineEnd;
+    NEWLINE.lastIndex = cursor;
+  }
+  if (cursor < end) parts.push({ start: cursor, end });
+  return parts;
+}
+
+function mergeByDisabledStatus(source: string, parts: readonly { start: number; end: number }[], disabled: Set<number>) {
+  const merged: { start: number; end: number; disabled: boolean }[] = [];
+  for (const part of parts) {
+    const status = disabled.has(displayPosition(source, part.start).line);
+    const last = merged.at(-1);
+    if (last && last.disabled === status) last.end = part.end;
+    else merged.push({ start: part.start, end: part.end, disabled: status });
+  }
+  return merged;
+}
+
 export function markdownCommentTexts(source: string): { text: string; start: number }[] {
   const root = unified().use(remarkParse).use(remarkGfm).parse(source) as MdNode;
   return directives(root, 0).html;
@@ -84,20 +115,27 @@ export function extractMarkdown(input: ExtractInput): ExtractionResult {
   let suppressedSegments = 0;
   const notices = new Set<string>();
   for (const range of ranges.sort((a, b) => a.start - b.start)) {
-    const line = displayPosition(input.source, range.start).line;
-    const text = input.source.slice(range.start, range.end);
-    if (policy.disabled.has(line)) {
-      if (/\p{L}/u.test(text)) suppressedSegments += 1;
-      continue;
-    }
-    if (frontmatter !== undefined && range.start < frontmatter) continue;
-    if (/\{#[A-Za-z][^}]*\}|\\[^\p{L}\p{N}\s]|&(?:#\d+|#x[0-9a-f]+|[a-z]+);/iu.test(text)) {
-      protectedLines.add(line); continue;
-    }
-    const segment = makeSegment(`${input.snapshot.id}_s${segments.length + 1}`, input.snapshot.id, input.source, range.start, range.end, input.glossary);
-    if (segment) {
-      segments.push(segment);
-      if (range.heading) notices.add('anchor_may_change');
+    const startLine = displayPosition(input.source, range.start).line;
+    const endLine = displayPosition(input.source, Math.max(range.start, range.end - 1)).line;
+    const subranges = startLine === endLine
+      ? [{ start: range.start, end: range.end, disabled: policy.disabled.has(startLine) }]
+      : mergeByDisabledStatus(input.source, lineParts(input.source, range.start, range.end), policy.disabled);
+    for (const part of subranges) {
+      const line = displayPosition(input.source, part.start).line;
+      const text = input.source.slice(part.start, part.end);
+      if (part.disabled) {
+        if (/\p{L}/u.test(text)) suppressedSegments += 1;
+        continue;
+      }
+      if (frontmatter !== undefined && part.start < frontmatter) continue;
+      if (/\{#[A-Za-z][^}]*\}|\\[^\p{L}\p{N}\s]|&(?:#\d+|#x[0-9a-f]+|[a-z]+);/iu.test(text)) {
+        protectedLines.add(line); continue;
+      }
+      const segment = makeSegment(`${input.snapshot.id}_s${segments.length + 1}`, input.snapshot.id, input.source, part.start, part.end, input.glossary);
+      if (segment) {
+        segments.push(segment);
+        if (range.heading) notices.add('anchor_may_change');
+      }
     }
   }
   const diagnostics = [...policy.diagnostics, ...[...protectedLines].sort((a, b) => a - b).map(line => ({ code: 'protected_markdown_construct', line }))];

@@ -1,6 +1,14 @@
 // Development quality harness only. Compares model proposals against labeled gold corrections.
 export function scoreQuality(gold, predictions) {
-  const predByPath = new Map(predictions.map((p) => [p.path, p]));
+  // Merge proposals from any duplicate path entries instead of letting a
+  // later entry silently overwrite an earlier one's proposals.
+  const predByPath = new Map();
+  for (const prediction of predictions) {
+    const existing = predByPath.get(prediction.path);
+    if (existing) existing.proposals.push(...prediction.proposals);
+    else predByPath.set(prediction.path, { path: prediction.path, proposals: [...prediction.proposals] });
+  }
+  const goldPaths = new Set(gold.map((file) => file.path));
   let truePositives = 0;
   let falseNegatives = 0;
   let falsePositives = 0;
@@ -23,6 +31,15 @@ export function scoreQuality(gold, predictions) {
     for (const leftover of remainingProposals) {
       falsePositives += 1;
       unexpectedChanges.push({ path: file.path, original: leftover.original, replacement: leftover.replacement });
+    }
+  }
+  // Predictions for files the gold set never labeled are unscorable
+  // successes; every proposal in them is an unexpected change.
+  for (const [path, prediction] of predByPath) {
+    if (goldPaths.has(path)) continue;
+    for (const leftover of prediction.proposals) {
+      falsePositives += 1;
+      unexpectedChanges.push({ path, original: leftover.original, replacement: leftover.replacement });
     }
   }
 

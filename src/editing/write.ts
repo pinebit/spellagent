@@ -60,22 +60,26 @@ export async function withProjectWriteLock<T>(root: string, signal: AbortSignal 
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new HelperError('write_lock_contended');
     throw new HelperError('write_lock_failed');
   }
+  let result: T | undefined;
+  let pending: unknown;
   try {
     try {
       await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + '\n');
       await lock.sync();
     } catch { throw new HelperError('write_lock_failed'); }
     cancelled(signal);
-    return await action(path.join(root, STATE_DIRECTORY, LOG_DIRECTORY));
-  } finally {
-    await lock.close().catch(() => undefined);
-    try { await unlink(lockPath); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new HelperError('lock_cleanup_failed', { possibleLeftover: true });
-      }
+    result = await action(path.join(root, STATE_DIRECTORY, LOG_DIRECTORY));
+  } catch (error) { pending = error; }
+  await lock.close().catch(() => undefined);
+  try { await unlink(lockPath); }
+  catch (error) {
+    // A lock-cleanup failure must never hide an earlier, more diagnostic failure.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !pending) {
+      pending = new HelperError('lock_cleanup_failed', { possibleLeftover: true });
     }
   }
+  if (pending) throw pending;
+  return result as T;
 }
 
 export async function atomicReplace(options: {
@@ -93,11 +97,17 @@ export async function atomicReplace(options: {
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   let renamed = false;
   let intentLogged = false;
+  let outcome: { afterHash: string } | undefined;
+  let pending: unknown;
   try {
     handle = await open(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
     await handle.writeFile(options.candidate);
     await handle.sync();
-    await handle.chmod(before.info.mode & 0o777);
+    // Preserve the full mode (including setuid/setgid/sticky bits) and, best
+    // effort, ownership -- chmod alone previously carried only the low
+    // permission bits and left ownership at whichever user ran the helper.
+    await handle.chmod(before.info.mode & 0o7777);
+    await handle.chown(before.info.uid, before.info.gid).catch(() => undefined);
     cancelled(options.signal);
     await appendLog(options.logDirectory, { event: 'write_intent', path: options.relative,
       beforeHash: options.expectedHash, candidateHash: options.candidateHash, proposalCount: options.proposalCount });
@@ -111,28 +121,37 @@ export async function atomicReplace(options: {
     cancelled(options.signal);
     await rename(temporary, options.absolute);
     renamed = true;
+    // fsync the containing directory so the rename survives a crash, not
+    // just the completion log entry that follows it.
+    const directory = await open(path.dirname(options.absolute), constants.O_RDONLY);
+    try { await directory.sync(); } finally { await directory.close(); }
     await appendLog(options.logDirectory, { event: 'write_complete', path: options.relative,
       beforeHash: options.expectedHash, afterHash: options.candidateHash, proposalCount: options.proposalCount });
-    return { afterHash: options.candidateHash };
+    outcome = { afterHash: options.candidateHash };
   } catch (error) {
-    if (renamed) throw new HelperError('write_completion_log_failed', { fileState: 'changed_log_incomplete' });
-    const failure = error instanceof HelperError ? error : new HelperError('replacement_failed');
-    if (intentLogged) {
-      await appendLog(options.logDirectory, { event: 'write_aborted', path: options.relative,
-        beforeHash: options.expectedHash, candidateHash: options.candidateHash,
-        proposalCount: options.proposalCount,
-        code: failure.code });
+    if (renamed) {
+      pending = new HelperError('write_completion_log_failed', { fileState: 'changed_log_incomplete' });
+    } else {
+      const failure = error instanceof HelperError ? error : new HelperError('replacement_failed');
+      if (intentLogged) {
+        // A failed abort-log append must not replace the real failure above.
+        await appendLog(options.logDirectory, { event: 'write_aborted', path: options.relative,
+          beforeHash: options.expectedHash, candidateHash: options.candidateHash,
+          proposalCount: options.proposalCount,
+          code: failure.code }).catch(() => undefined);
+      }
+      pending = failure;
     }
-    throw failure;
-  } finally {
-    await handle?.close().catch(() => undefined);
-    if (!renamed) {
-      try { await unlink(temporary); }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw new HelperError('temporary_cleanup_failed', { possibleLeftover: true });
-        }
+  }
+  await handle?.close().catch(() => undefined);
+  if (!renamed) {
+    try { await unlink(temporary); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !pending) {
+        pending = new HelperError('temporary_cleanup_failed', { possibleLeftover: true });
       }
     }
   }
+  if (pending) throw pending;
+  return outcome!;
 }

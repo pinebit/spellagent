@@ -6,7 +6,8 @@ description: >
   scope (10 files) follows the required Result/What changed/Needs
   attention/Coverage section structure in order; true interrupted-run
   evidence is covered separately by a live SIGINT test outside this eval
-  suite (docs/phase-d.md's "Live cancellation test" section), not by this case.
+  suite (see AGENTS.md's "Headless cancellation reporting unverified" note
+  under "Known issues and open gaps"), not by this case.
 tags: [ux, section2]
 context:
   add_dirs: [sample]
