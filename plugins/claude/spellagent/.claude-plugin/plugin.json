@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Safe local proofreading for documentation, comments, and docstrings, with scope and correction previews.",
   "author": {
-    "name": "SpellAgent contributors"
+    "name": "Andrei Smirnov"
   },
   "license": "MIT"
 }

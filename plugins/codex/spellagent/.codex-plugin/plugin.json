@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Safe local proofreading for documentation, comments, and docstrings, with scope and correction previews.",
   "author": {
-    "name": "SpellAgent contributors"
+    "name": "Andrei Smirnov"
   },
   "license": "MIT",
   "skills": "./skills/",
@@ -11,7 +11,7 @@
     "displayName": "SpellAgent",
     "shortDescription": "Correct local prose with validated per-file edits.",
     "longDescription": "Proofread local documentation, comments, and supported docstrings; apply locally validated corrections or preview scope and single-file proposals.",
-    "developerName": "SpellAgent contributors",
+    "developerName": "Andrei Smirnov",
     "category": "Productivity",
     "capabilities": ["Write"],
     "defaultPrompt": [

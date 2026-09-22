@@ -5,7 +5,7 @@
     "description": "SpellAgent: safe local proofreading for documentation, comments, and docstrings."
   },
   "owner": {
-    "name": "SpellAgent contributors"
+    "name": "Andrei Smirnov"
   },
   "plugins": [
     {
@@ -13,7 +13,7 @@
       "description": "Correct local prose with validated per-file edits.",
       "version": "0.1.0",
       "author": {
-        "name": "SpellAgent contributors"
+        "name": "Andrei Smirnov"
       },
       "source": "./build/plugins/claude/spellagent",
       "category": "productivity"

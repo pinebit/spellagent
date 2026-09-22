@@ -1,5 +1,12 @@
 # SpellAgent
 
+> **⚠️ Experimental — under active development.** SpellAgent is not yet
+> stable: behavior, protocols, and configuration can change without notice
+> between commits, and it has not been broadly tested across projects or
+> hosts. It edits your files in place. Use it at your own risk, review every
+> change it makes, and keep your work under version control before running
+> it.
+
 Safe, local proofreading for your documentation, source comments, and
 docstrings — as a plugin for Claude Code and Codex. Your existing host
 handles authentication and model access; SpellAgent finds prose safely and
