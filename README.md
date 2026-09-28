@@ -8,9 +8,10 @@
 > it.
 
 Safe, local proofreading for your documentation, source comments, and
-docstrings — as a plugin for Claude Code and Codex. Your existing host
-handles authentication and model access; SpellAgent finds prose safely and
-applies only validated corrections, one file at a time.
+docstrings — as a plugin for Claude Code and Codex. A TypeSafe Jev
+pre-screen skips files that have no likely errors; your existing host's model
+reviews the rest. SpellAgent finds prose safely and applies only validated
+corrections, one file at a time.
 
 ## What it corrects
 
@@ -56,9 +57,21 @@ codex plugin marketplace add /path/to/spellagent
 codex plugin add spellagent@spellagent-codex-marketplace
 ```
 
-Requires no separate API keys and no compiler — the plugin ships its own
-runtime dependencies and grammar files; only the one-time `npm ci` and
-`npm run build:plugins` above need npm.
+Requires no compiler — the plugin ships its own runtime dependencies and
+grammar files; only the one-time `npm ci` and `npm run build:plugins` above
+need npm.
+
+### TypeSafe API key
+
+Correction and correction preview require a [TypeSafe](https://typesafe.ai)
+API key in the `TYPESAFE_API_KEY` environment variable, visible to the host
+that runs the plugin — for example exported in your shell profile before
+starting Claude Code or Codex, or set under `env` in `~/.claude/settings.json`.
+SpellAgent does not read `.env` files. Without the key those modes refuse to
+run; scope preview works without it. The pre-screen needs network access to
+`api.typesafe.ai`: allow that domain if Claude Code's sandbox is enabled, and
+enable `sandbox_workspace_write.network_access` (or approve network access)
+in Codex.
 
 ## Use it
 
@@ -114,12 +127,13 @@ files use their own language's comment syntax with the same directive text.
 
 ## Privacy
 
-Correction and correction-preview modes send extracted prose to your selected
-host model; scope preview never does. Model retention follows your host or
-organization's policy — SpellAgent doesn't control it. The local helper
-itself makes no network calls, stores no prompts or source text, and never
-stages, commits, or publishes changes; inspect what changed with your own
-tools.
+Correction and correction-preview modes send extracted prose to TypeSafe
+(`api.typesafe.ai`) for pre-screening, then send prose from the files it flags
+to your selected host model; scope preview does neither. Retention follows
+TypeSafe's policy and your host or organization's policy — SpellAgent doesn't
+control either. The pre-screen is the local helper's only network use; the
+helper stores no prompts or source text and never stages, commits, or
+publishes changes; inspect what changed with your own tools.
 
 ## Contributing
 

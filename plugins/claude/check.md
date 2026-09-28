@@ -41,3 +41,8 @@ This fork is the single worker and processes files sequentially. Scope preview
 does not send extracted prose to a proofreading model, though the host session and
 tool/conversation retention still apply. Correction and correction preview are
 model-backed and must use the helper for all validation and writes.
+
+Correction and correction preview first pre-screen files through the helper, which
+reads `TYPESAFE_API_KEY` from the environment Claude Code passes to Bash (for
+example an exported shell variable or `env` in Claude Code settings) and contacts
+`api.typesafe.ai`. If Claude Code's sandbox is enabled, that domain must be allowed.

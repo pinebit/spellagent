@@ -62,7 +62,7 @@ try {
       engines: { node: '>=24' },
     }, null, 2) + '\n');
     // Explicit allowlist excludes developer probes and any stale build output.
-    for (const directory of ['core', 'discovery', 'editing', 'extractors', 'plugin']) {
+    for (const directory of ['core', 'discovery', 'editing', 'extractors', 'plugin', 'screening']) {
       await cp(path.join(root, 'dist', directory), path.join(runtime, 'dist', directory), {
         recursive: true, filter: source => !source.endsWith('.d.ts'),
       });

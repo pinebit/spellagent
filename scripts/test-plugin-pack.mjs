@@ -94,6 +94,12 @@ try {
     assert.equal(invalidGlossary.status, 2);
     assert.deepEqual(JSON.parse(invalidGlossary.stdout), { ok: false, protocolVersion: 2,
       code: 'invalid_glossary', invalidGlossaryIndexes: [1] });
+    // `env` never carries TYPESAFE_API_KEY, so pre-screening must refuse before any network call.
+    const screen = spawnSync(process.execPath, [helper], { cwd, env,
+      input: JSON.stringify({ protocolVersion: 2, operation: 'screen', root: project,
+        policyHash: discovery.policyHash, scopeHash: discovery.scopeHash }), encoding: 'utf8', timeout: 30_000 });
+    assert.equal(screen.status, 2);
+    assert.deepEqual(JSON.parse(screen.stdout), { ok: false, protocolVersion: 2, code: 'typesafe_api_key_missing' });
     const extraction = run({ protocolVersion: 2, operation: 'extract', root: project, path: 'notes.md',
       policyHash: discovery.policyHash, snapshotHash: discovery.items[0].snapshot.sha256 });
     assert.equal(extraction.snapshot.bom, true);
@@ -139,7 +145,7 @@ try {
       assert.equal(invalid.status, 2);
       assert.equal(JSON.parse(invalid.stdout).code, code);
     }
-    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['core', 'discovery', 'editing', 'extractors', 'plugin']);
+    assert.deepEqual((await readdir(path.join(runtime, 'dist'))).sort(), ['core', 'discovery', 'editing', 'extractors', 'plugin', 'screening']);
     const dependencies = JSON.parse(await readFile(path.join(runtime, 'dependencies.json'), 'utf8'));
     assert.ok(dependencies.some(entry => entry.name === 'web-tree-sitter'));
     assert.ok(!dependencies.some(entry => /ai-sdk|^ai$|commander/.test(entry.name)));

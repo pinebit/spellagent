@@ -18,11 +18,20 @@ For offline scope preview, run the helper yourself without delegation or
 proofreading. For correction, correction preview, or an explicitly requested
 host/model feasibility evaluation, delegate to exactly one fresh worker with
 `gpt-5.6-luna` and low reasoning effort unless the user explicitly selects another
-available model. For project correction, first use offline discovery to establish
-and present the effective scope/settings and privacy notice. Give the worker the
-complete workflow, absolute helper path, discovery result, and requested preferences.
-Wait for it in the foreground and relay its
-outcome and incomplete gates. No nested delegation or parallel file workers.
+available model. For project correction and correction preview, first use
+offline discovery to establish and present the effective scope/settings and privacy
+notice, then run the workflow's pre-screen step yourself. If pre-screening fails,
+report it as the workflow describes and do not spawn a worker. If no file is
+flagged, report the outcome yourself without spawning a worker. Otherwise give the
+worker the complete workflow, absolute helper path, discovery result, the flagged
+files only, and requested preferences. Wait for it in the foreground and relay its
+outcome and incomplete gates, counting files passed by the pre-screen in the coverage.
+No nested delegation or parallel file workers.
+
+Pre-screening reads `TYPESAFE_API_KEY` from the helper's environment and needs
+network access to `api.typesafe.ai`. If it reports `typesafe_unreachable`, point the
+user to Codex's `sandbox_workspace_write.network_access` setting in `config.toml`
+or to approving network access for the helper command.
 
 Request model selection through the host's supported spawn interface; never
 silently inherit the parent model. If selection is unavailable, rejected, or
