@@ -6,3 +6,4 @@ coverage/
 *.tgz
 .spellagent/
 evals/results/
+.env

@@ -7,6 +7,8 @@ import { discover, extractLocalFile, sha256 } from '../discovery/discover.js';
 import { assertChain, inspectPath, targetPath } from '../discovery/filesystem.js';
 import { handleFixtureRequest } from './fixture-protocol.js';
 import { pageRecords } from './paging.js';
+import { SCREEN_PAGE_FILES, SCREEN_THRESHOLD, screenFiles } from '../screening/screen.js';
+import { typesafeApiKey } from '../screening/typesafe.js';
 import { validateResponses } from '../editing/validate.js';
 import { atomicReplace, withProjectWriteLock } from '../editing/write.js';
 import type { DiscoveryEntry } from '../discovery/discover.js';
@@ -59,6 +61,10 @@ const requestSchema = z.discriminatedUnion('operation', [
     targets: z.array(z.union([z.literal('.'), relativePathSchema])).max(256).default(['.']),
     scopeHash: hashSchema.optional(),
   }),
+  z.strictObject({ ...shared, operation: z.literal('screen'),
+    targets: z.array(z.union([z.literal('.'), relativePathSchema])).max(256).default(['.']),
+    policyHash: hashSchema, scopeHash: hashSchema,
+  }),
   z.strictObject({ ...shared, operation: z.literal('extract'), path: relativePathSchema,
     snapshotHash: hashSchema.optional(),
   }),
@@ -88,21 +94,35 @@ export async function handleRequest(input: unknown, signal?: AbortSignal) {
     throw new HelperError('invalid_request');
   }
   const request = parsed.data;
+  // Pre-screening requires the TypeSafe key; refuse before touching the project.
+  const apiKey = request.operation === 'screen' ? typesafeApiKey() : undefined;
   const root = await resolveProjectRoot(request.root);
   const identity = await inspectPath(root);
   const preferences = await loadPreferences(root, request.preferences);
   const policyHash = policyDigest(root, preferences);
-  if ((request.operation === 'discover' || request.operation === 'extract') &&
+  if ((request.operation === 'discover' || request.operation === 'screen' || request.operation === 'extract') &&
       ((request.cursor > 0 && !request.policyHash) || (request.policyHash && request.policyHash !== policyHash))) {
     throw new HelperError('policy_mismatch');
   }
   const common = { protocolVersion: PROTOCOL_VERSION,
     extractionVersion: EXTRACTION_VERSION, policyVersion: POLICY_VERSION, policyHash };
-  if (request.operation === 'discover') {
+  if (request.operation === 'discover' || request.operation === 'screen') {
     const records = await discover({ root, paths: request.targets, preferences });
     const scopeHash = sha256(JSON.stringify({ records, policyHash }));
     if ((request.cursor > 0 && !request.scopeHash) || (request.scopeHash && request.scopeHash !== scopeHash)) {
       throw new HelperError('scope_mismatch');
+    }
+    if (request.operation === 'screen') {
+      const eligible = records.filter(item => item.state === 'eligible');
+      if (request.cursor > eligible.length) throw new HelperError('invalid_cursor');
+      const end = Math.min(request.cursor + SCREEN_PAGE_FILES, eligible.length);
+      const screened = await screenFiles({ root, preferences, entries: eligible.slice(request.cursor, end),
+        key: apiKey!, ...(signal ? { signal } : {}) });
+      await assertChain(identity.chain);
+      return { ...common, mode: 'screen' as const, sourceWrites: false, operation: 'screen' as const, scopeHash,
+        totalFiles: eligible.length, threshold: SCREEN_THRESHOLD, screeningModel: screened.model,
+        usage: { inputTokens: screened.inputTokens }, items: screened.items,
+        cursor: request.cursor, nextCursor: end < eligible.length ? end : null };
     }
     await assertChain(identity.chain);
     const byFormat = Object.fromEntries([...records.reduce((formats, item) => {
